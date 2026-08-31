@@ -1,23 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
   Bell,
-  Bot,
-  ChevronDown,
   Globe,
   Instagram,
-  LayoutGrid,
   Mail,
   MessageCircle,
   MessagesSquare,
   Pencil,
   Plus,
-  Radio,
   Search,
   Send,
-  Users,
-  Zap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+
+import { AppShell } from "@/components/app-shell";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -131,14 +127,6 @@ const bots: BotItem[] = [
   },
 ];
 
-const nav = [
-  { label: "Overview", icon: LayoutGrid },
-  { label: "Live Inbox", icon: Radio, badge: "3" },
-  { label: "Campaigns", icon: Zap },
-  { label: "Bots", icon: Bot, active: true },
-  { label: "Analytics", icon: Users },
-];
-
 function formatCount(n: number) {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`;
 }
@@ -206,97 +194,55 @@ function BotCard({ bot }: { bot: BotItem }) {
 
 function BotsPage() {
   return (
-    <div className="min-h-screen bg-background font-sans antialiased">
-      <div className="flex">
-        <aside className="sticky top-0 hidden h-screen w-56 shrink-0 flex-col border-r border-border/70 bg-surface px-3 py-5 lg:flex">
-          <div className="flex items-center gap-2 px-2 pb-6">
-            <span className="grid size-7 place-items-center rounded-lg bg-primary text-[13px] font-semibold text-primary-foreground">
-              V
-            </span>
-            <span className="text-sm font-semibold tracking-tight text-foreground">Vittain AI</span>
+    <AppShell
+      header={({ menuButton }) => (
+        <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-border/70 bg-background/80 px-4 py-3 backdrop-blur-xl sm:px-5">
+          {menuButton}
+          <p className="text-xs text-muted-foreground">Bots / All</p>
+          <div className="ml-auto flex items-center gap-2">
+            <div className="relative hidden sm:block">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <input
+                placeholder="Search bots"
+                className="h-8 w-40 rounded-full border border-border/70 bg-card pl-8 pr-3 text-xs text-foreground outline-none transition-shadow placeholder:text-muted-foreground focus:ring-2 focus:ring-ring/40 md:w-52"
+              />
+            </div>
+            <button
+              type="button"
+              aria-label="Notifications"
+              className="grid size-8 shrink-0 place-items-center rounded-full border border-border/70 bg-card text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <Bell className="size-4" strokeWidth={1.9} />
+            </button>
           </div>
-
-          <nav className="flex flex-col gap-0.5">
-            {nav.map(({ label, icon: Icon, badge, active }) => (
-              <button
-                key={label}
-                type="button"
-                className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] transition-colors ${
-                  active
-                    ? "bg-card font-medium text-foreground shadow-card"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                }`}
-              >
-                <Icon className="size-4" strokeWidth={1.9} />
-                {label}
-                {badge && (
-                  <span className="ml-auto rounded-full bg-foreground px-1.5 text-[10px] font-semibold text-primary-foreground">
-                    {badge}
-                  </span>
-                )}
-              </button>
-            ))}
-          </nav>
-
-          <div className="mt-auto flex items-center gap-2 rounded-xl border border-border/70 bg-card px-2.5 py-2">
-            <span className="grid size-7 place-items-center rounded-full bg-secondary text-[11px] font-semibold text-secondary-foreground">
-              VI
-            </span>
-            <div className="min-w-0">
-              <p className="truncate text-xs font-medium text-foreground">Vittain AI</p>
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Pro plan</p>
-            </div>
-            <ChevronDown className="ml-auto size-3.5 text-muted-foreground" />
+        </header>
+      )}
+    >
+      <div className="px-4 py-7 sm:px-8 sm:py-8">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4 sm:flex sm:flex-wrap sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="font-display text-[22px] font-semibold tracking-[-0.02em] text-foreground sm:text-[26px]">
+              My Bots
+            </h1>
+            <p className="mt-1 text-[13px] text-muted-foreground">
+              Every AI bot, every channel — performance at a glance.
+            </p>
           </div>
-        </aside>
+          <button
+            type="button"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary px-3.5 py-2 text-[13px] font-medium text-primary-foreground transition-opacity hover:opacity-90"
+          >
+            <Plus className="size-3.5" strokeWidth={2.2} />
+            New bot
+          </button>
+        </div>
 
-        <main className="min-w-0 flex-1">
-          <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-border/70 bg-background/80 px-5 py-3 backdrop-blur-xl">
-            <p className="text-xs text-muted-foreground">Bots / All</p>
-            <div className="ml-auto flex items-center gap-2">
-              <div className="relative hidden sm:block">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  placeholder="Search bots"
-                  className="h-8 w-52 rounded-full border border-border/70 bg-card pl-8 pr-3 text-xs text-foreground outline-none transition-shadow placeholder:text-muted-foreground focus:ring-2 focus:ring-ring/40"
-                />
-              </div>
-              <button
-                type="button"
-                className="grid size-8 place-items-center rounded-full border border-border/70 bg-card text-muted-foreground transition-colors hover:text-foreground"
-              >
-                <Bell className="size-4" strokeWidth={1.9} />
-              </button>
-            </div>
-          </header>
-
-          <div className="px-5 py-8 sm:px-8">
-            <div className="flex flex-wrap items-end justify-between gap-4">
-              <div>
-                <h1 className="font-display text-[26px] font-semibold tracking-[-0.02em] text-foreground">
-                  My Bots
-                </h1>
-                <p className="mt-1 text-[13px] text-muted-foreground">
-                  Every AI bot, every channel — performance at a glance.
-                </p>
-              </div>
-              <button
-                type="button"
-                className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3.5 py-2 text-[13px] font-medium text-primary-foreground transition-opacity hover:opacity-90"
-              >
-                <Plus className="size-3.5" strokeWidth={2.2} />
-                New bot
-              </button>
-            </div>
-
-            <div className="mt-7 grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-              {bots.map((bot) => (
-                <BotCard key={bot.name} bot={bot} />
-              ))}
-            </div>
-          </div>
-        </main>
+        <div className="mt-7 grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          {bots.map((bot) => (
+            <BotCard key={bot.name} bot={bot} />
+          ))}
+        </div>
       </div>
-    </div>
+    </AppShell>
   );
 }
