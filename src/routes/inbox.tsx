@@ -297,7 +297,8 @@ function InboxPage() {
   const [profileOpen, setProfileOpen] = useState(true);
   const [listOpen, setListOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState("All");
-  const active = conversations.find((c) => c.id === activeId) ?? conversations[0];
+  const active: Conversation =
+    conversations.find((c) => c.id === activeId) ?? (conversations[0] as Conversation);
 
   const list = (
     <div className="flex h-full flex-col">
