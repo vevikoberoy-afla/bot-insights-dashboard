@@ -481,7 +481,7 @@ function OverviewPage() {
                     <div className="flex items-baseline justify-between gap-2">
                       <span className="truncate text-[11.5px] text-muted-foreground">{f.stage}</span>
                       <span className="text-[12px] font-semibold tabular-nums text-foreground">
-                        {f.value.toLocaleString()}
+                        {f.value.toLocaleString("en-US")}
                         {prev && (
                           <span className="ml-1.5 text-[10px] font-medium text-muted-foreground">
                             {((f.value / prev) * 100).toFixed(1)}%
@@ -533,7 +533,7 @@ function OverviewPage() {
                         </span>
                       </td>
                       <td className="px-1 py-2.5 text-right tabular-nums text-muted-foreground">
-                        {b.leads.toLocaleString()}
+                        {b.leads.toLocaleString("en-US")}
                       </td>
                       <td className="px-1 py-2.5 text-right">
                         <span className="inline-flex items-center gap-1.5">
