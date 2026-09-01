@@ -268,7 +268,7 @@ function KpiCard({ kpi }: { kpi: Kpi }) {
 }
 
 function OverviewPage() {
-  const maxFunnel = funnel[0].value;
+  const maxFunnel = funnel[0]?.value ?? 1;
 
   return (
     <AppShell
@@ -475,7 +475,7 @@ function OverviewPage() {
             <ul className="space-y-2.5">
               {funnel.map((f, i) => {
                 const pct = (f.value / maxFunnel) * 100;
-                const prev = i === 0 ? null : funnel[i - 1].value;
+                const prev = i === 0 ? null : (funnel[i - 1]?.value ?? null);
                 return (
                   <li key={f.stage}>
                     <div className="flex items-baseline justify-between gap-2">
