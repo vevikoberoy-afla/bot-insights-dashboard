@@ -559,6 +559,7 @@ function InboxPage() {
           </>
         )}
       </div>
-    </div>
+    </AppShell>
+
   );
 }
