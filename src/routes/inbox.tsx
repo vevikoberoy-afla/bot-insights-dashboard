@@ -1,4 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { AppShell } from "@/components/app-shell";
+
 import {
   ArrowLeft,
   Bell,
@@ -352,37 +354,42 @@ function InboxPage() {
   );
 
   return (
-    <div className="flex h-[100dvh] flex-col bg-background font-sans antialiased">
-      <header className="flex shrink-0 items-center gap-3 border-b border-border/70 bg-background/80 px-4 py-3 backdrop-blur-xl">
-        <button
-          type="button"
-          onClick={() => setListOpen(true)}
-          aria-label="Open conversations"
-          className="grid size-8 shrink-0 place-items-center rounded-full border border-border/70 bg-card text-muted-foreground transition-colors hover:text-foreground md:hidden"
-        >
-          <ArrowLeft className="size-4" strokeWidth={1.9} />
-        </button>
-        <h1 className="text-[15px] font-semibold tracking-tight text-foreground">Inbox</h1>
-        <div className="ml-auto flex items-center gap-2">
-          <div className="relative hidden sm:block">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            <input
-              placeholder="Search…"
-              className="h-8 w-44 rounded-full border border-border/70 bg-card pl-8 pr-3 text-xs text-foreground outline-none transition-shadow placeholder:text-muted-foreground focus:ring-2 focus:ring-ring/40"
-            />
-          </div>
+    <AppShell
+      contentClassName="flex h-[100dvh] min-w-0 flex-col"
+      header={({ menuButton }) => (
+        <header className="flex shrink-0 items-center gap-3 border-b border-border/70 bg-background/80 px-4 py-3 backdrop-blur-xl">
+          {menuButton}
           <button
             type="button"
-            aria-label="Notifications"
-            className="relative grid size-8 place-items-center rounded-full border border-border/70 bg-card text-muted-foreground transition-colors hover:text-foreground"
+            onClick={() => setListOpen(true)}
+            aria-label="Open conversations"
+            className="grid size-8 shrink-0 place-items-center rounded-full border border-border/70 bg-card text-muted-foreground transition-colors hover:text-foreground md:hidden"
           >
-            <Bell className="size-4" strokeWidth={1.9} />
-            <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-success" />
+            <ArrowLeft className="size-4" strokeWidth={1.9} />
           </button>
-        </div>
-      </header>
-
+          <h1 className="text-[15px] font-semibold tracking-tight text-foreground">Inbox</h1>
+          <div className="ml-auto flex items-center gap-2">
+            <div className="relative hidden sm:block">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <input
+                placeholder="Search…"
+                className="h-8 w-44 rounded-full border border-border/70 bg-card pl-8 pr-3 text-xs text-foreground outline-none transition-shadow placeholder:text-muted-foreground focus:ring-2 focus:ring-ring/40"
+              />
+            </div>
+            <button
+              type="button"
+              aria-label="Notifications"
+              className="relative grid size-8 place-items-center rounded-full border border-border/70 bg-card text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <Bell className="size-4" strokeWidth={1.9} />
+              <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-success" />
+            </button>
+          </div>
+        </header>
+      )}
+    >
       <div className="flex min-h-0 flex-1">
+
         <section className="hidden w-[300px] shrink-0 border-r border-border/70 bg-surface md:flex md:flex-col xl:w-[340px]">
           {list}
         </section>
@@ -554,6 +561,7 @@ function InboxPage() {
           </>
         )}
       </div>
-    </div>
+    </AppShell>
+
   );
 }

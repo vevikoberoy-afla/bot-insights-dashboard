@@ -5,14 +5,14 @@ import { useState, type ReactNode } from "react";
 type NavItem = {
   label: string;
   icon: typeof Bot;
-  to?: "/" | "/inbox" | "/overview";
+  to?: "/" | "/inbox" | "/overview" | "/campaigns";
   badge?: string;
 };
 
 const nav: NavItem[] = [
   { label: "Overview", icon: LayoutGrid, to: "/overview" },
   { label: "Live Inbox", icon: Radio, to: "/inbox", badge: "3" },
-  { label: "Campaigns", icon: Zap },
+  { label: "Campaigns", icon: Zap, to: "/campaigns" },
   { label: "Bots", icon: Bot, to: "/" },
   { label: "Analytics", icon: Users },
 ];
