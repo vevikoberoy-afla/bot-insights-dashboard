@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as InboxRouteImport } from './routes/inbox'
 import { Route as OverviewRouteImport } from './routes/overview'
 import { Route as CampaignsIndexRouteImport } from './routes/campaigns.index'
+import { Route as CampaignsAnalyticsRouteImport } from './routes/campaigns.analytics'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -34,17 +35,24 @@ const CampaignsIndexRoute = CampaignsIndexRouteImport.update({
   path: '/campaigns/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CampaignsAnalyticsRoute = CampaignsAnalyticsRouteImport.update({
+  id: '/campaigns/analytics',
+  path: '/campaigns/analytics',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/inbox': typeof InboxRoute
   '/overview': typeof OverviewRoute
+  '/campaigns/analytics': typeof CampaignsAnalyticsRoute
   '/campaigns/': typeof CampaignsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/inbox': typeof InboxRoute
   '/overview': typeof OverviewRoute
+  '/campaigns/analytics': typeof CampaignsAnalyticsRoute
   '/campaigns': typeof CampaignsIndexRoute
 }
 export interface FileRoutesById {
@@ -52,20 +60,29 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/inbox': typeof InboxRoute
   '/overview': typeof OverviewRoute
+  '/campaigns/analytics': typeof CampaignsAnalyticsRoute
   '/campaigns/': typeof CampaignsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/inbox' | '/overview' | '/campaigns/'
+  fullPaths:
+    '/' | '/inbox' | '/overview' | '/campaigns/analytics' | '/campaigns/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/inbox' | '/overview' | '/campaigns'
-  id: '__root__' | '/' | '/inbox' | '/overview' | '/campaigns/'
+  to: '/' | '/inbox' | '/overview' | '/campaigns/analytics' | '/campaigns'
+  id:
+    | '__root__'
+    | '/'
+    | '/inbox'
+    | '/overview'
+    | '/campaigns/analytics'
+    | '/campaigns/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   InboxRoute: typeof InboxRoute
   OverviewRoute: typeof OverviewRoute
+  CampaignsAnalyticsRoute: typeof CampaignsAnalyticsRoute
   CampaignsIndexRoute: typeof CampaignsIndexRoute
 }
 
@@ -99,6 +116,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CampaignsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/campaigns/analytics': {
+      id: '/campaigns/analytics'
+      path: '/campaigns/analytics'
+      fullPath: '/campaigns/analytics'
+      preLoaderRoute: typeof CampaignsAnalyticsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -106,6 +130,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   InboxRoute: InboxRoute,
   OverviewRoute: OverviewRoute,
+  CampaignsAnalyticsRoute: CampaignsAnalyticsRoute,
   CampaignsIndexRoute: CampaignsIndexRoute,
 }
 export const routeTree = rootRouteImport
