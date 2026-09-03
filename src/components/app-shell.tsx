@@ -1,11 +1,11 @@
 import { Link } from "@tanstack/react-router";
-import { Bot, ChevronDown, LayoutGrid, Menu, Radio, Users, X, Zap } from "lucide-react";
+import { Bot, ChevronDown, LayoutGrid, Menu, Plus, Radio, Users, X, Zap } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 type NavItem = {
   label: string;
   icon: typeof Bot;
-  to?: "/" | "/inbox" | "/overview" | "/campaigns";
+  to?: "/" | "/inbox" | "/overview" | "/campaigns" | "/campaigns/new";
   badge?: string;
 };
 
@@ -13,6 +13,7 @@ const nav: NavItem[] = [
   { label: "Overview", icon: LayoutGrid, to: "/overview" },
   { label: "Live Inbox", icon: Radio, to: "/inbox", badge: "3" },
   { label: "Campaigns", icon: Zap, to: "/campaigns" },
+  { label: "New Campaign", icon: Plus, to: "/campaigns/new" },
   { label: "Bots", icon: Bot, to: "/" },
   { label: "Analytics", icon: Users },
 ];
