@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as InboxRouteImport } from './routes/inbox'
 import { Route as OverviewRouteImport } from './routes/overview'
+import { Route as BotsBotIdRouteImport } from './routes/bots.$botId'
 import { Route as CampaignsIndexRouteImport } from './routes/campaigns.index'
 import { Route as CampaignsAnalyticsRouteImport } from './routes/campaigns.analytics'
 import { Route as CampaignsNewRouteImport } from './routes/campaigns.new'
@@ -29,6 +30,11 @@ const InboxRoute = InboxRouteImport.update({
 const OverviewRoute = OverviewRouteImport.update({
   id: '/overview',
   path: '/overview',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BotsBotIdRoute = BotsBotIdRouteImport.update({
+  id: '/bots/$botId',
+  path: '/bots/$botId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CampaignsIndexRoute = CampaignsIndexRouteImport.update({
@@ -51,6 +57,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/inbox': typeof InboxRoute
   '/overview': typeof OverviewRoute
+  '/bots/$botId': typeof BotsBotIdRoute
   '/campaigns/analytics': typeof CampaignsAnalyticsRoute
   '/campaigns/new': typeof CampaignsNewRoute
   '/campaigns/': typeof CampaignsIndexRoute
@@ -59,6 +66,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/inbox': typeof InboxRoute
   '/overview': typeof OverviewRoute
+  '/bots/$botId': typeof BotsBotIdRoute
   '/campaigns/analytics': typeof CampaignsAnalyticsRoute
   '/campaigns/new': typeof CampaignsNewRoute
   '/campaigns': typeof CampaignsIndexRoute
@@ -68,6 +76,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/inbox': typeof InboxRoute
   '/overview': typeof OverviewRoute
+  '/bots/$botId': typeof BotsBotIdRoute
   '/campaigns/analytics': typeof CampaignsAnalyticsRoute
   '/campaigns/new': typeof CampaignsNewRoute
   '/campaigns/': typeof CampaignsIndexRoute
@@ -78,6 +87,7 @@ export interface FileRouteTypes {
     | '/'
     | '/inbox'
     | '/overview'
+    | '/bots/$botId'
     | '/campaigns/analytics'
     | '/campaigns/new'
     | '/campaigns/'
@@ -86,6 +96,7 @@ export interface FileRouteTypes {
     | '/'
     | '/inbox'
     | '/overview'
+    | '/bots/$botId'
     | '/campaigns/analytics'
     | '/campaigns/new'
     | '/campaigns'
@@ -94,6 +105,7 @@ export interface FileRouteTypes {
     | '/'
     | '/inbox'
     | '/overview'
+    | '/bots/$botId'
     | '/campaigns/analytics'
     | '/campaigns/new'
     | '/campaigns/'
@@ -103,6 +115,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   InboxRoute: typeof InboxRoute
   OverviewRoute: typeof OverviewRoute
+  BotsBotIdRoute: typeof BotsBotIdRoute
   CampaignsAnalyticsRoute: typeof CampaignsAnalyticsRoute
   CampaignsNewRoute: typeof CampaignsNewRoute
   CampaignsIndexRoute: typeof CampaignsIndexRoute
@@ -129,6 +142,13 @@ declare module '@tanstack/react-router' {
       path: '/overview'
       fullPath: '/overview'
       preLoaderRoute: typeof OverviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/bots/$botId': {
+      id: '/bots/$botId'
+      path: '/bots/$botId'
+      fullPath: '/bots/$botId'
+      preLoaderRoute: typeof BotsBotIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/campaigns/': {
@@ -159,6 +179,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   InboxRoute: InboxRoute,
   OverviewRoute: OverviewRoute,
+  BotsBotIdRoute: BotsBotIdRoute,
   CampaignsAnalyticsRoute: CampaignsAnalyticsRoute,
   CampaignsNewRoute: CampaignsNewRoute,
   CampaignsIndexRoute: CampaignsIndexRoute,
