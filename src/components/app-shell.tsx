@@ -2,6 +2,8 @@ import { Link } from "@tanstack/react-router";
 import { Bot, ChevronDown, LayoutGrid, Menu, Plus, Radio, Users, X, Zap } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
+import { ThemeToggle } from "@/components/theme-toggle";
+
 type NavItem = {
   label: string;
   icon: typeof Bot;
@@ -64,15 +66,21 @@ function SidebarInner({ onNavigate }: { onNavigate?: () => void }) {
         })}
       </nav>
 
-      <div className="mt-auto flex items-center gap-2 rounded-xl border border-border/70 bg-card px-2.5 py-2">
-        <span className="grid size-7 place-items-center rounded-full bg-secondary text-[11px] font-semibold text-secondary-foreground">
-          VI
-        </span>
-        <div className="min-w-0">
-          <p className="truncate text-xs font-medium text-foreground">Vittain AI</p>
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Pro plan</p>
+      <div className="mt-auto flex flex-col gap-2">
+        <div className="flex items-center justify-between rounded-xl border border-border/70 bg-card px-2.5 py-2">
+          <p className="text-[11px] font-medium text-muted-foreground">Appearance</p>
+          <ThemeToggle className="size-7" />
         </div>
-        <ChevronDown className="ml-auto size-3.5 shrink-0 text-muted-foreground" />
+        <div className="flex items-center gap-2 rounded-xl border border-border/70 bg-card px-2.5 py-2">
+          <span className="grid size-7 place-items-center rounded-full bg-secondary text-[11px] font-semibold text-secondary-foreground">
+            VI
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-xs font-medium text-foreground">Vittain AI</p>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Pro plan</p>
+          </div>
+          <ChevronDown className="ml-auto size-3.5 shrink-0 text-muted-foreground" />
+        </div>
       </div>
     </>
   );
