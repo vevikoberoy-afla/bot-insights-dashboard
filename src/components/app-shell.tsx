@@ -2,6 +2,8 @@ import { Link } from "@tanstack/react-router";
 import { Bot, ChevronDown, LayoutGrid, Menu, Plus, Radio, Users, X, Zap } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
+import { ThemeToggle } from "@/components/theme-toggle";
+
 type NavItem = {
   label: string;
   icon: typeof Bot;
