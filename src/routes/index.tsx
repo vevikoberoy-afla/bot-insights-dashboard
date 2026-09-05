@@ -180,14 +180,16 @@ function BotCard({ bot }: { bot: BotItem }) {
 
       <footer className="mt-3 flex items-center justify-between border-t border-border/70 pt-2.5">
         <span className="text-[11px] text-muted-foreground">Active {bot.lastActive}</span>
-        <button
-          type="button"
+        <Link
+          to="/bots/$botId"
+          params={{ botId: bot.name.toLowerCase().replace(/\s+/g, "-") }}
           className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
           <Pencil className="size-3" strokeWidth={2} />
           Edit
-        </button>
+        </Link>
       </footer>
+
     </article>
   );
 }
