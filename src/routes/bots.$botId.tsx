@@ -4,6 +4,7 @@ import {
   Bell,
   Bot,
   BookOpen,
+  CheckCircle2,
   Clock,
   Copy,
   Database,
@@ -472,7 +473,13 @@ type CollectionPoint = {
 const dashedButton =
   "inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border px-3 py-2 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground";
 
-function SubCard({ children, onRemove }: { children: React.ReactNode; onRemove?: () => void }) {
+function SubCard({
+  children,
+  onRemove,
+}: {
+  children: React.ReactNode;
+  onRemove?: (() => void) | undefined;
+}) {
   return (
     <div className="relative rounded-xl border border-border/70 bg-background p-3.5">
       {onRemove && (
