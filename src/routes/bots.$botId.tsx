@@ -1061,7 +1061,7 @@ function TriggersTab() {
                     {t.fires} fires
                   </span>
                   <div className="ml-auto">
-                    <ToggleRow title={`${t.name} enabled`} defaultChecked />
+                    <TriggerSwitch label={`${t.name} enabled`} />
                   </div>
                 </div>
                 <p className="mt-1 text-[11.5px] text-muted-foreground">When · {t.when}</p>
