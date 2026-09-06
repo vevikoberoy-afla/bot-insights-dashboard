@@ -514,6 +514,11 @@ function InlineToggle({
   );
 }
 
+function TriggerSwitch({ label }: { label: string }) {
+  const [on, setOn] = useState(true);
+  return <Toggle checked={on} onChange={setOn} label={label} />;
+}
+
 let uid = 100;
 const nextId = () => ++uid;
 
