@@ -2,11 +2,13 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   ArrowLeft,
   Bell,
+  BatteryMedium,
   Bot,
   BookOpen,
   CheckCircle2,
   Clock,
   Copy,
+  ChevronLeft,
   Database,
   Globe,
   Hash,
@@ -16,6 +18,7 @@ import {
   Plus,
   Search,
   Send,
+  Signal,
   Settings2,
   SlidersHorizontal,
   Sparkles,
@@ -23,6 +26,7 @@ import {
   UploadCloud,
   UserRound,
   Wand2,
+  Wifi,
   Zap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -54,13 +58,7 @@ export const Route = createFileRoute("/bots/$botId")({
 });
 
 type TabKey =
-  | "identity"
-  | "knowledge"
-  | "channels"
-  | "behavior"
-  | "triggers"
-  | "mcp"
-  | "appearance";
+  "identity" | "knowledge" | "channels" | "behavior" | "triggers" | "mcp" | "appearance";
 
 const tabs: { key: TabKey; label: string; icon: LucideIcon }[] = [
   { key: "identity", label: "Identity & Persona", icon: UserRound },
@@ -165,7 +163,9 @@ function ToggleRow({
     <div className="flex items-start gap-3 border-t border-border/70 py-3 first:border-t-0 first:pt-0">
       <div className="min-w-0">
         <p className="text-[13px] font-medium text-foreground">{title}</p>
-        {desc && <p className="mt-0.5 text-[11.5px] leading-relaxed text-muted-foreground">{desc}</p>}
+        {desc && (
+          <p className="mt-0.5 text-[11.5px] leading-relaxed text-muted-foreground">{desc}</p>
+        )}
       </div>
       <div className="ml-auto pt-0.5">
         <Toggle checked={on} onChange={setOn} label={title} />
@@ -363,7 +363,10 @@ function KnowledgeTab() {
             title="Semantic reranking"
             desc="Re-ranks retrieved chunks by exact relevance before answering."
           />
-          <ToggleRow title="Cite sources in replies" desc="Adds a compact source link per answer." />
+          <ToggleRow
+            title="Cite sources in replies"
+            desc="Adds a compact source link per answer."
+          />
         </Panel>
 
         <Panel className="border-dashed">
@@ -747,7 +750,9 @@ function BehaviorTab() {
                       value={pt.destination}
                       onChange={(e) =>
                         setPoints((p) =>
-                          p.map((x) => (x.id === pt.id ? { ...x, destination: e.target.value } : x)),
+                          p.map((x) =>
+                            x.id === pt.id ? { ...x, destination: e.target.value } : x,
+                          ),
                         )
                       }
                       className={inputClass}
@@ -859,10 +864,7 @@ function BehaviorTab() {
 
           <div className="mt-3">
             <FieldLabel>Escalation keywords</FieldLabel>
-            <input
-              defaultValue="refund, cancel order, speak to manager"
-              className={inputClass}
-            />
+            <input defaultValue="refund, cancel order, speak to manager" className={inputClass} />
           </div>
 
           <div className="mt-3">
@@ -1019,12 +1021,17 @@ function TriggersTab() {
     const a = Number(mockValue);
     const b = Number(cond.value);
     const ok =
-      cond.op === ">=" ? a >= b
-      : cond.op === ">" ? a > b
-      : cond.op === "=" ? a === b
-      : cond.op === "<" ? a < b
-      : cond.op === "<=" ? a <= b
-      : mockValue.includes(cond.value);
+      cond.op === ">="
+        ? a >= b
+        : cond.op === ">"
+          ? a > b
+          : cond.op === "="
+            ? a === b
+            : cond.op === "<"
+              ? a < b
+              : cond.op === "<="
+                ? a <= b
+                : mockValue.includes(cond.value);
     setResult({
       fires: ok,
       text: `Condition ${cond.event} ${cond.op} ${cond.value} ${ok ? "matched" : "did not match"} mock value ${mockValue}.`,
@@ -1336,9 +1343,7 @@ function TriggersTab() {
             <div
               className={cn(
                 "mt-3 rounded-xl border p-3",
-                result.fires
-                  ? "border-success/40 bg-success/10"
-                  : "border-border/70 bg-background",
+                result.fires ? "border-success/40 bg-success/10" : "border-border/70 bg-background",
               )}
             >
               <div className="flex items-center gap-1.5">
@@ -1493,7 +1498,11 @@ function AppearanceTab() {
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <FieldLabel>Widget title</FieldLabel>
-              <input value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} />
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className={inputClass}
+              />
             </div>
             <div>
               <FieldLabel>Theme color</FieldLabel>
@@ -1550,42 +1559,91 @@ function AppearanceTab() {
         </Panel>
       </div>
 
-      <Panel title="Live preview" icon={Sparkles}>
-        <div className="mx-auto w-full max-w-sm overflow-hidden rounded-2xl border border-border/70 bg-background shadow-card">
-          <div
-            className="flex items-center gap-2.5 px-4 py-3"
-            style={{ backgroundColor: color }}
-          >
-            <span className="grid size-8 place-items-center rounded-full bg-white/15 text-white">
-              <Bot className="size-4" strokeWidth={1.9} />
-            </span>
-            <div>
-              <p className="text-[13px] font-semibold text-white">{title || "AI Assistant"}</p>
-              <p className="text-[10.5px] text-white/70">Online now</p>
+      <Panel title="Live preview" icon={Sparkles} className="overflow-hidden">
+        <div className="flex min-h-[660px] items-center justify-center rounded-xl bg-surface px-3 py-5 sm:px-6">
+          <div className="relative w-full max-w-[306px] rounded-[3.3rem] border border-device-edge bg-device-frame p-[7px] shadow-[0_28px_70px_-24px_var(--device-frame)]">
+            <span className="absolute -left-[3px] top-28 h-8 w-[3px] rounded-l-full bg-device-edge" />
+            <span className="absolute -left-[3px] top-40 h-14 w-[3px] rounded-l-full bg-device-edge" />
+            <span className="absolute -right-[3px] top-36 h-20 w-[3px] rounded-r-full bg-device-edge" />
+
+            <div className="relative aspect-[9/19.5] overflow-hidden rounded-[2.9rem] bg-background ring-1 ring-background/20">
+              <div className="absolute left-1/2 top-2 z-20 h-[25px] w-[82px] -translate-x-1/2 rounded-full bg-device-frame" />
+              <div className="absolute left-1/2 top-[13px] z-30 size-1.5 translate-x-[25px] rounded-full bg-device-edge" />
+
+              <div className="absolute inset-x-0 top-0 z-10 flex h-11 items-center justify-between px-6 text-[9px] font-semibold text-primary-foreground">
+                <span>9:41</span>
+                <div className="flex items-center gap-1">
+                  <Signal className="size-3" strokeWidth={2.2} />
+                  <Wifi className="size-3" strokeWidth={2.2} />
+                  <BatteryMedium className="h-3 w-3.5" strokeWidth={2.2} />
+                </div>
+              </div>
+
+              <div className="flex h-full flex-col">
+                <div
+                  className="flex shrink-0 items-end gap-2 px-4 pb-3 pt-12 text-primary-foreground"
+                  style={{ backgroundColor: color }}
+                >
+                  <ChevronLeft className="mb-2 size-4 shrink-0" strokeWidth={2} />
+                  <span className="grid size-9 place-items-center rounded-full bg-primary-foreground/15">
+                    <Bot className="size-4" strokeWidth={1.9} />
+                  </span>
+                  <div className="min-w-0 pb-0.5">
+                    <p className="truncate text-[12.5px] font-semibold">
+                      {title || "AI Assistant"}
+                    </p>
+                    <p className="flex items-center gap-1 text-[9.5px] opacity-75">
+                      <span className="size-1.5 rounded-full bg-success" /> Online now
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex min-h-0 flex-1 flex-col gap-3 bg-surface px-3 py-4">
+                  <span className="mx-auto rounded-full bg-card px-2 py-0.5 text-[8.5px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Today, 9:41 AM
+                  </span>
+                  <div className="flex items-end gap-1.5">
+                    <span className="grid size-6 shrink-0 place-items-center rounded-full border border-border/70 bg-card text-muted-foreground">
+                      <Bot className="size-3" strokeWidth={1.9} />
+                    </span>
+                    <div className="max-w-[78%] rounded-2xl rounded-bl-md border border-border/70 bg-card px-3 py-2.5 text-[11px] leading-relaxed text-foreground shadow-card">
+                      {welcome}
+                    </div>
+                  </div>
+                  <div
+                    className="ml-auto max-w-[78%] rounded-2xl rounded-br-md px-3 py-2.5 text-[11px] leading-relaxed text-primary-foreground"
+                    style={{ backgroundColor: color }}
+                  >
+                    Do you ship to Berlin?
+                  </div>
+                  <div className="flex items-end gap-1.5">
+                    <span className="grid size-6 shrink-0 place-items-center rounded-full border border-border/70 bg-card text-muted-foreground">
+                      <Bot className="size-3" strokeWidth={1.9} />
+                    </span>
+                    <div className="max-w-[78%] rounded-2xl rounded-bl-md border border-border/70 bg-card px-3 py-2.5 text-[11px] leading-relaxed text-foreground shadow-card">
+                      Yes, we ship to Berlin. Standard delivery takes 3–5 business days.
+                    </div>
+                  </div>
+                  <p className="pl-8 text-[8.5px] text-muted-foreground">Delivered · just now</p>
+                </div>
+
+                <div className="shrink-0 border-t border-border/70 bg-card px-3 pb-6 pt-2.5">
+                  <div className="flex items-end gap-2 rounded-2xl border border-border/70 bg-background py-1.5 pl-3 pr-1.5">
+                    <input
+                      placeholder="Message…"
+                      className="h-7 min-w-0 flex-1 bg-transparent text-[10.5px] text-foreground outline-none placeholder:text-muted-foreground"
+                    />
+                    <span
+                      className="grid size-7 shrink-0 place-items-center rounded-full text-primary-foreground"
+                      style={{ backgroundColor: color }}
+                    >
+                      <Send className="size-3" strokeWidth={2.2} />
+                    </span>
+                  </div>
+                  <div className="absolute bottom-2 left-1/2 h-1 w-24 -translate-x-1/2 rounded-full bg-foreground/80" />
+                </div>
+              </div>
             </div>
-          </div>
-          <div className="flex min-h-56 flex-col gap-2 bg-surface px-3.5 py-4">
-            <span className="mx-auto rounded-full bg-card px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-              Today
-            </span>
-            <div className="max-w-[80%] rounded-2xl rounded-tl-md border border-border/70 bg-card px-3 py-2 text-[12.5px] text-foreground shadow-card">
-              {welcome}
-            </div>
-            <div className="ml-auto max-w-[80%] rounded-2xl rounded-tr-md px-3 py-2 text-[12.5px] text-white" style={{ backgroundColor: color }}>
-              Do you ship to Berlin?
-            </div>
-          </div>
-          <div className="flex items-center gap-2 border-t border-border/70 bg-card px-3 py-2.5">
-            <input
-              placeholder="Type your message…"
-              className="h-8 flex-1 rounded-full border border-border/70 bg-background px-3 text-[12px] outline-none placeholder:text-muted-foreground"
-            />
-            <span
-              className="grid size-8 shrink-0 place-items-center rounded-full text-white"
-              style={{ backgroundColor: color }}
-            >
-              <Send className="size-3.5" strokeWidth={2} />
-            </span>
           </div>
         </div>
       </Panel>

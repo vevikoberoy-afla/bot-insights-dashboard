@@ -20,7 +20,6 @@ const nav: NavItem[] = [
   { label: "Analytics", icon: Users },
 ];
 
-
 function SidebarInner({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <>
