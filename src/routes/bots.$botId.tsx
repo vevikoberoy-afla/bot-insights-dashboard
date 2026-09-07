@@ -58,13 +58,7 @@ export const Route = createFileRoute("/bots/$botId")({
 });
 
 type TabKey =
-  | "identity"
-  | "knowledge"
-  | "channels"
-  | "behavior"
-  | "triggers"
-  | "mcp"
-  | "appearance";
+  "identity" | "knowledge" | "channels" | "behavior" | "triggers" | "mcp" | "appearance";
 
 const tabs: { key: TabKey; label: string; icon: LucideIcon }[] = [
   { key: "identity", label: "Identity & Persona", icon: UserRound },
@@ -169,7 +163,9 @@ function ToggleRow({
     <div className="flex items-start gap-3 border-t border-border/70 py-3 first:border-t-0 first:pt-0">
       <div className="min-w-0">
         <p className="text-[13px] font-medium text-foreground">{title}</p>
-        {desc && <p className="mt-0.5 text-[11.5px] leading-relaxed text-muted-foreground">{desc}</p>}
+        {desc && (
+          <p className="mt-0.5 text-[11.5px] leading-relaxed text-muted-foreground">{desc}</p>
+        )}
       </div>
       <div className="ml-auto pt-0.5">
         <Toggle checked={on} onChange={setOn} label={title} />
@@ -367,7 +363,10 @@ function KnowledgeTab() {
             title="Semantic reranking"
             desc="Re-ranks retrieved chunks by exact relevance before answering."
           />
-          <ToggleRow title="Cite sources in replies" desc="Adds a compact source link per answer." />
+          <ToggleRow
+            title="Cite sources in replies"
+            desc="Adds a compact source link per answer."
+          />
         </Panel>
 
         <Panel className="border-dashed">
@@ -751,7 +750,9 @@ function BehaviorTab() {
                       value={pt.destination}
                       onChange={(e) =>
                         setPoints((p) =>
-                          p.map((x) => (x.id === pt.id ? { ...x, destination: e.target.value } : x)),
+                          p.map((x) =>
+                            x.id === pt.id ? { ...x, destination: e.target.value } : x,
+                          ),
                         )
                       }
                       className={inputClass}
@@ -863,10 +864,7 @@ function BehaviorTab() {
 
           <div className="mt-3">
             <FieldLabel>Escalation keywords</FieldLabel>
-            <input
-              defaultValue="refund, cancel order, speak to manager"
-              className={inputClass}
-            />
+            <input defaultValue="refund, cancel order, speak to manager" className={inputClass} />
           </div>
 
           <div className="mt-3">
@@ -1023,12 +1021,17 @@ function TriggersTab() {
     const a = Number(mockValue);
     const b = Number(cond.value);
     const ok =
-      cond.op === ">=" ? a >= b
-      : cond.op === ">" ? a > b
-      : cond.op === "=" ? a === b
-      : cond.op === "<" ? a < b
-      : cond.op === "<=" ? a <= b
-      : mockValue.includes(cond.value);
+      cond.op === ">="
+        ? a >= b
+        : cond.op === ">"
+          ? a > b
+          : cond.op === "="
+            ? a === b
+            : cond.op === "<"
+              ? a < b
+              : cond.op === "<="
+                ? a <= b
+                : mockValue.includes(cond.value);
     setResult({
       fires: ok,
       text: `Condition ${cond.event} ${cond.op} ${cond.value} ${ok ? "matched" : "did not match"} mock value ${mockValue}.`,
@@ -1340,9 +1343,7 @@ function TriggersTab() {
             <div
               className={cn(
                 "mt-3 rounded-xl border p-3",
-                result.fires
-                  ? "border-success/40 bg-success/10"
-                  : "border-border/70 bg-background",
+                result.fires ? "border-success/40 bg-success/10" : "border-border/70 bg-background",
               )}
             >
               <div className="flex items-center gap-1.5">
@@ -1497,7 +1498,11 @@ function AppearanceTab() {
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <FieldLabel>Widget title</FieldLabel>
-              <input value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} />
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className={inputClass}
+              />
             </div>
             <div>
               <FieldLabel>Theme color</FieldLabel>
@@ -1584,7 +1589,9 @@ function AppearanceTab() {
                     <Bot className="size-4" strokeWidth={1.9} />
                   </span>
                   <div className="min-w-0 pb-0.5">
-                    <p className="truncate text-[12.5px] font-semibold">{title || "AI Assistant"}</p>
+                    <p className="truncate text-[12.5px] font-semibold">
+                      {title || "AI Assistant"}
+                    </p>
                     <p className="flex items-center gap-1 text-[9.5px] opacity-75">
                       <span className="size-1.5 rounded-full bg-success" /> Online now
                     </p>
