@@ -1,0 +1,1147 @@
+
+this is a separate dashboard apart from admin its for client side so create this 
+================================================================
+VITTAIN AI — FRONTEND UI BUILD PROMPT
+Client Dashboard — Complete Design System & Page-by-Page Spec
+================================================================
+Stack: Next.js 14 (App Router), TypeScript, Tailwind CSS
+Design Language: White Minimalism — Notion + Slack + Linear
+Component Source: shadcn/ui (https://ui.shadcn.com/docs/components)
+Icon Library: Lucide React (https://lucide.dev/icons/)
+Font: Geist Sans (display) + Geist Mono (data/code)
+================================================================
+
+READ THIS FULLY BEFORE WRITING A SINGLE LINE OF CODE.
+Build one page at a time. Confirm before moving on.
+No UI library other than shadcn/ui + Tailwind CSS.
+TypeScript strict mode. No "any" types.
+All pages are inside /app/(dashboard)/ using Next.js App Router.
+================================================================
+
+SECTION 0: DESIGN SYSTEM
+================================================================
+
+0.1 — COLOR TOKENS (add to tailwind.config.ts)
+----------------------------------------------------------------
+colors: {
+  surface: {
+    DEFAULT: '#FFFFFF',     // pure white — all main panels
+    muted:   '#F9F9F8',     // off-white — sidebar, hover bg
+    subtle:  '#F3F3F2',     // card backgrounds, input fills
+    border:  '#E8E8E6',     // all dividers, card borders
+  },
+  ink: {
+    DEFAULT: '#1A1A19',     // primary text — near black, not pure
+    secondary: '#6B6B68',   // secondary text, labels, meta
+    muted:   '#A8A8A4',     // placeholder, disabled, timestamps
+  },
+  accent: {
+    DEFAULT: '#2563EB',     // Vittain blue — CTAs, active states
+    hover:   '#1D4ED8',     // hover on CTAs
+    light:   '#EFF6FF',     // badge backgrounds, hover row tints
+    muted:   '#BFDBFE',     // secondary badges, chart accents
+  },
+  status: {
+    green:   '#16A34A',     // active, running, resolved
+    greenBg: '#F0FDF4',
+    amber:   '#D97706',     // waiting, pending, draft
+    amberBg: '#FFFBEB',
+    red:     '#DC2626',     // error, failed, escalated
+    redBg:   '#FEF2F2',
+    blue:    '#2563EB',     // info, AI, in-progress
+    blueBg:  '#EFF6FF',
+  },
+}
+----------------------------------------------------------------
+
+0.2 — TYPOGRAPHY
+----------------------------------------------------------------
+Font pairing:
+- Display/headings: Geist Sans, font-weight 500-600
+- Body: Geist Sans, font-weight 400
+- Data/IDs/code snippets: Geist Mono, font-weight 400
+
+Type scale:
+- Page title (h1):   text-xl font-semibold tracking-tight text-ink
+- Section title (h2): text-sm font-semibold text-ink uppercase tracking-widest
+- Card title:         text-sm font-medium text-ink
+- Body:               text-sm text-ink/80
+- Meta/label:         text-xs text-ink-secondary
+- Monospace data:     text-xs font-mono text-ink-secondary
+
+Rule: No bold body text. Use font-medium (500) for emphasis.
+Rule: All section headings use uppercase + tracking-widest.
+Rule: Page titles are never larger than text-xl.
+----------------------------------------------------------------
+
+0.3 — SPACING & LAYOUT
+----------------------------------------------------------------
+- Sidebar width: 240px, fixed, full height
+- Content area: flex-1, min-h-screen, overflow-auto
+- Page padding: p-8 (desktop), p-4 (mobile)
+- Section gap: space-y-8 between major sections
+- Card gap: gap-4 inside grids
+- All border-radius: rounded-lg (8px) — no rounded-full, no rounded-xl
+  Exception: status badges use rounded-full
+- All cards: border border-surface-border bg-surface shadow-none
+  Hover: bg-surface-muted transition-colors
+- No drop shadows anywhere except modals (shadow-lg)
+----------------------------------------------------------------
+
+0.4 — COMPONENT GUIDE — WHERE TO GET EACH FROM shadcn/ui
+----------------------------------------------------------------
+Install shadcn: npx shadcn@latest init
+Then install each individually: npx shadcn@latest add <name>
+
+Component                   | shadcn Command
+----------------------------|--------------------------
+Button, variants            | button
+Input, Textarea             | input / textarea
+Select dropdown             | select
+Dialog / Modal              | dialog
+Sheet (slide-over panel)    | sheet
+Tabs                        | tabs
+Badge (status chips)        | badge
+Avatar                      | avatar
+Progress bar                | progress
+Tooltip                     | tooltip
+Dropdown menu               | dropdown-menu
+Command (search palette)    | command
+Popover                     | popover
+Table                       | table
+Skeleton (loading states)   | skeleton
+Toast notifications         | sonner (use sonner, not toast)
+Switch toggle               | switch
+Checkbox                    | checkbox
+Radio group                 | radio-group
+Separator                   | separator
+Card                        | card
+Collapsible (sidebar items) | collapsible
+Breadcrumb                  | breadcrumb
+Calendar / Date picker      | calendar
+
+Full component docs: https://ui.shadcn.com/docs/components/
+Full icon list: https://lucide.dev/icons/
+
+----------------------------------------------------------------
+
+0.5 — SIDEBAR DESIGN RULES
+----------------------------------------------------------------
+- Background: bg-surface-muted (#F9F9F8)
+- Right border: border-r border-surface-border
+- Logo area: 48px tall, px-4, flex items-center, border-b
+- Sections: separated by 8px space-y-1 groups
+- Section label: text-[10px] font-semibold uppercase tracking-widest
+  text-ink-muted px-3 py-2 mt-4 first:mt-2
+- Nav item (inactive): flex items-center gap-2.5 px-3 py-1.5
+  text-sm text-ink-secondary rounded-lg mx-1 hover:bg-surface-subtle
+  hover:text-ink transition-all cursor-pointer
+- Nav item (active): bg-surface-subtle text-ink font-medium
+- Sub-items: pl-8 (32px left padding), same height and hover rules
+- Icons: 16px (size-4), text-ink-muted on inactive, text-ink on active
+- Collapsible: chevron rotates 180deg on open (transition-transform)
+- Bottom area: border-t border-surface-border, account section
+- Account row: flex items-center gap-2.5 px-3 py-2
+  Avatar (28px) + name text-sm + chevron
+
+----------------------------------------------------------------
+
+0.6 — GLOBAL TOP BAR (inside content area, not sidebar)
+----------------------------------------------------------------
+- Height: 48px
+- border-b border-surface-border bg-surface
+- Left: current page breadcrumb (text-sm text-ink-secondary)
+- Right: notification bell icon + global search trigger (Cmd+K)
+  + primary CTA button specific to that page
+- Search: triggers a shadcn Command palette overlay
+  placeholder: "Search bots, campaigns, chunks..."
+
+================================================================
+SECTION 1: SHELL & NAVIGATION
+================================================================
+
+FILE: app/(dashboard)/layout.tsx
+
+This is the root layout for all dashboard pages.
+
+Structure:
+  <div className="flex h-screen overflow-hidden bg-surface">
+    <Sidebar />  {/* 240px fixed */}
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <TopBar />  {/* 48px fixed top */}
+      <main className="flex-1 overflow-auto p-8">
+        {children}
+      </main>
+    </div>
+  </div>
+
+------------------------------------------------------------
+FILE: components/layout/sidebar.tsx
+
+Sidebar structure (top to bottom):
+  
+  [Logo area]
+  Vittain logo (SVG) + wordmark "Vittain"
+
+  [Nav sections — use shadcn Collapsible for expandable groups]
+  
+  SECTION (no label):
+    → Overview (icon: LayoutDashboard)
+  
+  SECTION label: "CAMPAIGNS"
+    → Campaigns (icon: Megaphone) [collapsible]
+        sub: Analytics (icon: BarChart2)
+        sub: Create Campaign (icon: Plus)
+        sub: All Campaigns (icon: List)
+        sub: CRM (icon: Users)
+        sub: WhatsApp (icon: MessageCircle)
+        sub: SMS (icon: Smartphone)
+        sub: Email (icon: Mail)
+        sub: Web (icon: Globe)
+        sub: Settings (icon: Settings2)
+
+  SECTION label: "BOTS"
+    → Bots (icon: Bot) [collapsible]
+        sub: Analytics (icon: BarChart2)
+        sub: New Bot (icon: Plus)
+        sub: All Bots (icon: List)
+        sub: Settings (icon: Settings2)
+
+  SECTION label: "KNOWLEDGE"
+    → Knowledge Chunks (icon: BookOpen) [collapsible]
+        sub: Analytics (icon: BarChart2)
+        sub: Add Chunk (icon: Plus)
+        sub: All Chunks (icon: List)
+    → Databases (icon: Database) [collapsible]
+        sub: Analytics (icon: BarChart2)
+        sub: Add Database (icon: Plus)
+        sub: All Databases (icon: List)
+
+  SECTION label: "SUPPORT"
+    → Tickets (icon: Ticket) [collapsible]
+        sub: New Ticket (icon: Plus)
+        sub: Analytics (icon: BarChart2)
+    → Messages (icon: MessageSquare) [collapsible]
+        sub: Live Messages (icon: Radio)
+        sub: All Messages (icon: List)
+
+  SECTION label: "CONTENT"
+    → Templates (icon: FileText) [collapsible]
+        sub: Create Template (icon: Plus)
+        sub: My Templates (icon: List)
+
+  SECTION (no label):
+    → Notepad (icon: NotebookPen)
+    → Channels (icon: Layers)
+    → API Keys (icon: Key)
+    → Webhooks (icon: Webhook)
+
+  [BOTTOM — separated by border-t]
+    Account row:
+      Avatar (28px, initials fallback)
+      Company name text-sm font-medium
+      Plan badge (text-[10px] uppercase)
+      chevron dropdown → Settings link, Logout
+
+================================================================
+SECTION 2: OVERVIEW (DASHBOARD HOME)
+================================================================
+
+FILE: app/(dashboard)/overview/page.tsx
+Route: /overview
+
+TOP BAR right side:
+  Two buttons side by side:
+  [+ Add Bot]         → redirects to /bots/new
+  [▶ Run Campaign]    → redirects to /campaigns/create
+  Both: variant="default" size="sm" rounded-lg
+
+------------------------------------------------------------
+SUBSECTION 2.1 — GREETING ROW
+  
+  Left: "Good morning, [Company Name]"  text-xl font-semibold
+  Sub:  "[Day], [Date]"                 text-sm text-ink-secondary
+  
+  Right: nothing (buttons are in top bar)
+
+------------------------------------------------------------
+SUBSECTION 2.2 — KPI CARDS ROW
+  
+  Grid: grid grid-cols-4 gap-4 (desktop), 2 cols on mobile
+
+  Each KPI card:
+  - border border-surface-border rounded-lg p-4 bg-surface
+  - Label: text-xs uppercase tracking-widest text-ink-muted
+  - Value: text-2xl font-semibold text-ink font-mono
+  - Delta: text-xs text-status-green (↑ +12%) or text-status-red
+  - Small sparkline chart (recharts AreaChart, 40px tall, no axes)
+
+  Cards (8 total, scroll row on mobile):
+  1. Active Bots            icon: Bot
+  2. Active Campaigns       icon: Megaphone
+  3. Tickets Raised         icon: Ticket
+  4. Tickets Resolved       icon: CheckCircle
+  5. Outbound Messages      icon: ArrowUpRight
+  6. Inbound Messages       icon: ArrowDownLeft
+  7. Total Sales            icon: DollarSign (prefix: $)
+  8. Messages by Channel    icon: Layers (breakdown tooltip)
+
+------------------------------------------------------------
+SUBSECTION 2.3 — CURRENT BOTS & CAMPAIGNS
+
+Two column grid: grid grid-cols-2 gap-6
+
+LEFT COLUMN: "CURRENT BOTS"
+  Section label + "View all →" link right-aligned
+  
+  Horizontal scroll row of Bot cards:
+  Each bot card (160px wide, fixed height 120px):
+  - bg-surface border border-surface-border rounded-lg p-3
+  - cursor-pointer hover:border-accent/40 transition-all
+  - Bot icon (28px circle, accent bg)
+  - Bot name: text-sm font-medium
+  - Type badge: "Support" | "Marketing" | "Sales" (rounded-full text-xs)
+  - Status dot: green (active) / amber (paused)
+  - On click: redirect to /bots/[id]/settings
+
+RIGHT COLUMN: "CURRENT CAMPAIGNS"
+  Section label + "View all →" link right-aligned
+  
+  Horizontal scroll row of Campaign cards:
+  Each campaign card (180px wide, fixed height 120px):
+  - Same base card styles as bot cards
+  - Campaign name: text-sm font-medium
+  - Channel tag: WhatsApp / Email / SMS / Web (icon + label)
+  - Status badge: Running / Paused / Completed
+  - On click: redirect to /campaigns/[id]
+
+------------------------------------------------------------
+SUBSECTION 2.4 — MESSAGES BY CHANNEL BAR CHART
+
+Full width card:
+- Section label: "MESSAGES BY CHANNEL"
+- Right: date range selector (Last 7d / 30d / 90d)
+- recharts BarChart, grouped by channel (WhatsApp, SMS, Email, Web)
+- Colors: accent.DEFAULT for WhatsApp, accent.muted for SMS,
+  status.amber for Email, status.green for Web
+- No grid lines. Thin bars (barSize={24}). No legend — use a color key
+  row above the chart instead.
+
+================================================================
+SECTION 3: CAMPAIGNS
+================================================================
+
+3.A — CAMPAIGNS / ANALYTICS
+FILE: app/(dashboard)/campaigns/analytics/page.tsx
+
+Layout: standard page padding, section-by-section
+
+KPI row (5 cards):
+  Total Campaigns | Total Messages | Total Sales | Active Bots | 
+  Avg Response Rate
+
+Chart 1: Line chart — Messages over time, split by channel
+Chart 2: Donut chart — Campaign type breakdown (Support/Marketing/Sales)
+Chart 3: Bar chart — Conversion by channel
+
+Recent campaigns table:
+  Columns: Name | Channel | Status | Messages | Conversion | Started | Actions
+  Each row: clickable → /campaigns/[id]
+  Status column: colored badge (Running=green, Paused=amber, Done=blue)
+
+------------------------------------------------------------
+3.B — CAMPAIGNS / CREATE CAMPAIGN (MULTI-STEP WIZARD)
+FILE: app/(dashboard)/campaigns/create/page.tsx
+
+THIS IS THE MOST COMPLEX PAGE. Build as a multi-step form.
+
+TOP: step indicator bar (horizontal, 7 steps)
+  Step 1 ── Step 2 ── Step 3 ── Step 4 ── Step 5 ── Step 6 ── Step 7
+  Active step: accent color underline
+  Done steps: checkmark icon
+
+STEP 1 — CAMPAIGN BASICS
+  Input: Campaign Name          (placeholder: "Black Friday WhatsApp Blast")
+  Textarea: Campaign Goal       (placeholder: "Describe what this campaign should achieve")
+  Select: Campaign Type         (Marketing | Sales | Customer Support | Re-engagement)
+  Select: Service               (Customer Service | Marketing & Sales | Both)
+  Toggle: Save as template after creation? (shadcn Switch)
+  [Continue →]
+
+STEP 2 — SELECT CHANNEL
+  Card grid: 4 large channel cards (200px each)
+  Each channel card:
+  - Icon (32px) + channel name
+  - Brief description (1 line)
+  - hover:border-accent border-2 when selected
+  
+  Channels: WhatsApp | SMS | Email | Web Chat
+  Multi-select allowed (each gets a check in top-right corner)
+  [← Back] [Continue →]
+
+STEP 3 — KNOWLEDGE CHUNK
+  Section title: "Connect Knowledge"
+  Sub: "Give your bot information to answer from."
+
+  Two option cards side by side (like Notion's "Choose a block" style):
+  
+  Card A: "Use Existing Chunk"
+    List of existing chunks as selectable rows:
+    each row: chunk name | tags | # docs | last updated | radio select
+    [+ Add another chunk] button below list
+
+  Card B: "Create New Chunk"
+    Input: Chunk name
+    Tags input (comma-separated, renders as pill tags)
+    Upload zone (dashed border, drag & drop):
+      - Accepts: PDF, TXT, DOCX, CSV
+      - Icon: UploadCloud from Lucide
+      - Label: "Drag files here or click to browse"
+    OR divider
+    Input: "Paste a URL (webpage, Google Doc, Notion page)"
+    [Crawl & Import] button
+    Note: "New chunk will be saved to Knowledge Base"
+  
+  [← Back] [Continue →]
+
+STEP 4 — DATABASES
+  Same two-card layout as Step 3.
+
+  Card A: "Use Existing Database"
+    List of existing databases as selectable rows
+
+  Card B: "Create New Database"
+    Input: Database name
+    Select: Purpose (Order Tracking | Inventory | Leads | Custom)
+    Tags input
+    Connection options (radio group):
+      ○ Upload spreadsheet (Excel/CSV drag-drop)
+      ○ Google Sheets URL
+      ○ REST API URL
+      ○ Custom cURL
+    Conditional: input field appears based on selection
+    Note: "New database will be saved to Databases"
+
+  [← Back] [Continue →]
+
+STEP 5 — AUDIENCE
+  Section title: "Who receives this campaign?"
+  
+  Import options (card row, 3 cards):
+    Card A: Upload Spreadsheet (CSV/Excel — name, phone, email)
+    Card B: Paste Google Sheet URL → auto-import
+    Card C: Use CRM Contacts (existing contacts table, filterable)
+  
+  After import: preview table
+    Columns: Name | Phone | Email | Channel
+    Row count badge: "X contacts loaded"
+    Remove rows individually (X button per row)
+  
+  Segment filter (optional):
+    Add filter pills: [Channel = WhatsApp] [+ Add filter]
+
+  [← Back] [Continue →]
+
+STEP 6 — TEMPLATE
+  Section title: "Choose Your Message Template"
+  
+  Tab row: WhatsApp | SMS | Email | Web (shows only selected channels)
+  
+  WhatsApp tab:
+    Two option cards:
+    
+    A: "Use Pre-approved Template"
+       Grid of template cards — each shows:
+       template name | category | language | status badge (Approved)
+       On select: preview panel appears right-side with full message
+    
+    B: "Create New Template"
+       Input: Template name
+       Select: Category (Marketing | Utility | Authentication)
+       Textarea: Message body (with variable syntax {{1}} {{2}} support)
+       Warning banner (amber): 
+         "This template will be sent to Meta for approval. 
+          You can launch the campaign after approval (usually 24-48h)."
+       [Submit for approval]
+  
+  SMS/Email tab: simpler — just a text/HTML editor.
+  
+  Right panel (sticky): Live preview
+    Shows message in a phone frame (WhatsApp skin) or email preview
+
+  [← Back] [Continue →]
+
+STEP 7 — REVIEW & LAUNCH
+  Summary cards in a vertical stack:
+  
+  Row: Campaign Name            [Edit]
+  Row: Channel(s)               [Edit]
+  Row: Knowledge Chunk          [Edit]
+  Row: Database                 [Edit]
+  Row: Audience (X contacts)    [Edit]
+  Row: Template                 [Edit]
+  
+  Q&A Section:
+    Accordion list of pre-set Q&As
+    [+ Add Q&A pair] button
+    Each pair: Input (question) + Textarea (answer) + delete button
+  
+  Launch options:
+    Radio: Send now | Schedule for later
+    If "Schedule": datetime picker (shadcn Calendar + time input)
+  
+  [← Back] [🚀 Launch Campaign]
+  
+  On launch: full-screen success state
+    "Campaign launched. Here's what happens next..."
+    Summary of next steps + [View Campaign] button
+
+------------------------------------------------------------
+3.C — CAMPAIGNS / ALL CAMPAIGNS
+FILE: app/(dashboard)/campaigns/all/page.tsx
+
+Top bar right: [+ Create Campaign] → /campaigns/create
+
+Filter row:
+  [All] [Running] [Paused] [Completed] [Draft]
+  (tab-style, small, text-sm)
+
+  Right: channel filter dropdown + date range picker
+
+Campaign cards grid (grid-cols-3, gap-4):
+  Each card:
+  - Top: status badge (top-right) + channel icon (top-left)
+  - Campaign name: text-sm font-medium
+  - Type tag: pill badge (Marketing / Support)
+  - Stats row: Messages sent | Conversion | Replies
+  - Bottom: start date | [3-dot menu → Edit / Pause / Duplicate / Delete]
+  - Full card is clickable → /campaigns/[id]
+
+Empty state:
+  Center-aligned, dashed border card:
+  Icon: Megaphone (48px, text-ink-muted)
+  "No campaigns yet"
+  "Create your first campaign to start reaching customers."
+  [+ Create Campaign] button
+
+------------------------------------------------------------
+3.D — CAMPAIGNS / CRM
+FILE: app/(dashboard)/campaigns/crm/page.tsx
+
+Top bar right: [Import Contacts] [+ Add Contact]
+
+Filter row (left):
+  Search input | Segment filter | Channel filter | Date added
+
+Funnel section (above table):
+  3 column stat cards:
+  Leads | Active | Converted
+  With conversion % and a thin progress bar
+
+Contacts table (shadcn Table):
+  Columns: 
+  □ | Avatar | Name | Phone | Email | Channel | Segment | Last Seen | Actions
+  
+  Each row:
+  - Checkbox (for bulk actions)
+  - Name is a link → contact detail sheet (shadcn Sheet, slides from right)
+  - Status badge in Segment column
+  - Actions: [Send message] [View history] [Delete]
+
+Contact detail sheet (SlideOver):
+  Triggered by clicking name
+  Shows: full contact info, all conversations, segments, campaign history
+
+Pagination: shadcn Pagination component, 25 per page default
+
+------------------------------------------------------------
+3.E — CAMPAIGNS / CHANNEL PAGES (WhatsApp, SMS, Email, Web)
+FILE: app/(dashboard)/campaigns/whatsapp/page.tsx (same structure for others)
+
+Filtered view of all campaigns for that channel only.
+Same card grid as All Campaigns but pre-filtered.
+Top: channel-specific stats (4 KPI cards)
+Below: campaign card grid
+
+------------------------------------------------------------
+3.F — CAMPAIGNS / SETTINGS
+FILE: app/(dashboard)/campaigns/settings/page.tsx
+
+Section: Default sender info per channel
+  WhatsApp: Phone number ID | Access token
+  SMS: Provider (Twilio / etc) | API key
+  Email: SMTP settings | From name | From address
+  
+Each section: form with save button, shadcn Input fields.
+Status row: "Connected" (green) or "Not configured" (amber)
+
+================================================================
+SECTION 4: BOTS
+================================================================
+
+4.A — BOTS / ANALYTICS
+FILE: app/(dashboard)/bots/analytics/page.tsx
+
+Same layout as Campaigns Analytics.
+KPI: Total Bots | Active | Messages Handled | Handoffs | Avg Rating
+
+Chart 1: Messages handled by bot (grouped bar)
+Chart 2: Handoff rate over time (line chart)
+Chart 3: Top questions (horizontal bar list, top 10)
+
+------------------------------------------------------------
+4.B — BOTS / NEW BOT (CREATE WIZARD)
+FILE: app/(dashboard)/bots/new/page.tsx
+
+STEP 0 — BOT TYPE SELECTION (full page choice)
+  
+  Large two-card layout (centered, 400px each):
+  
+  Card A: "Campaign Bot"
+    Icon: Megaphone (40px)
+    Description: "Sends bulk messages, manages outreach campaigns."
+    → Clicking this runs the exact Campaign creation wizard from Section 3.B
+  
+  Card B: "Support Bot"
+    Icon: HeadsetIcon (40px)
+    Description: "Handles inbound questions, creates tickets, supports customers 24/7."
+    → Clicking this opens a variant of the wizard:
+
+  Card C: "Both — Campaign + Support"
+    Icon: Bot (40px)
+    Description: "A full bot: outreach campaigns and live support."
+    → Runs both wizards sequentially
+
+If "Support Bot" or "Both":
+  Same 7-step wizard as Campaign but:
+  Step 2: Channel selection defaults to Web Chat
+  Step 6: Template step is replaced by:
+    "Handoff Settings" — what the bot says before handing off
+    Input: Handoff message ("Let me connect you with a human...")
+    Toggle: Auto-create ticket on handoff?
+    Toggle: If marketing question detected → refer to Campaign bot?
+
+------------------------------------------------------------
+4.C — BOTS / ALL BOTS
+FILE: app/(dashboard)/bots/all/page.tsx
+
+Same card grid pattern as All Campaigns.
+Each bot card:
+  - Bot avatar (initial circle, accent bg)
+  - Bot name + type tag
+  - Channels it's deployed on (icon row)
+  - Stats: messages today | avg response | handoff rate
+  - Status badge
+  - [3-dot menu → Edit / Pause / Duplicate / Delete]
+
+------------------------------------------------------------
+4.D — BOTS / BOT DETAIL & SETTINGS
+FILE: app/(dashboard)/bots/[id]/settings/page.tsx
+
+Left: sticky tab list (vertical)
+  Overview | Knowledge | Databases | Channels | Q&A | Handoff | Danger Zone
+
+Each tab renders right panel content.
+
+Overview tab: Bot name, type, status, creation date, stats
+Knowledge tab: linked chunks (CRUD — add/remove/replace)
+Databases tab: linked databases (CRUD)
+Channels tab: which channels deployed + embed code snippet
+Q&A tab: accordion list of Q&A pairs + [Add] button
+Handoff tab: handoff message + ticket settings
+Danger Zone: [Pause Bot] [Delete Bot] — both with confirm dialogs
+
+================================================================
+SECTION 5: KNOWLEDGE CHUNKS
+================================================================
+
+5.A — KNOWLEDGE / ANALYTICS
+FILE: app/(dashboard)/knowledge/analytics/page.tsx
+
+KPI: Total Chunks | Chunks in Use | Total Documents | Total Tokens
+
+Table: "Chunk Usage"
+  Columns: Chunk Name | Used By (bot list) | # Docs | Size | Last Updated
+  
+Chart: Chunk usage bar chart (which chunks are most used)
+
+------------------------------------------------------------
+5.B — KNOWLEDGE / ADD CHUNK
+FILE: app/(dashboard)/knowledge/add/page.tsx
+
+Left panel (form, 60% width):
+  Input: Chunk name
+  Input: Tags (comma-separated → pill tags)
+  Select: Category (Marketing | Support | Sales | General)
+  
+  Source section (tabs):
+    Tab 1: Upload Files
+      Drag & drop zone
+      Supported: PDF, DOCX, TXT, CSV
+      File list below with progress bars on upload
+    
+    Tab 2: Paste URL
+      Input: URL (webpage, Google Doc, Notion)
+      [Crawl & Import] button
+      After crawl: shows extracted text preview
+    
+    Tab 3: Manual Text
+      Large textarea
+      Character count below (right-aligned)
+
+Right panel (sticky preview, 40% width):
+  "Chunk Preview"
+  Shows extracted text (after upload/crawl)
+  Token count estimate
+  [Save Chunk] button (bottom)
+
+------------------------------------------------------------
+5.C — KNOWLEDGE / ALL CHUNKS
+FILE: app/(dashboard)/knowledge/all/page.tsx
+
+Top bar right: [+ Add Chunk]
+
+Filter: search | category | status (in use / not used)
+
+Card grid (grid-cols-3, gap-4):
+  Each chunk card:
+  - Chunk name: text-sm font-medium
+  - Tags: pill row (max 3 visible, +N more)
+  - Stats: docs count | token count
+  - Used by: avatar row of bot icons (max 3, +N more)
+  - Last updated: relative timestamp
+  - [3-dot menu → Edit / Duplicate / Delete]
+  - Full card clickable → chunk detail slide-over
+
+Chunk detail slide-over:
+  Full content preview
+  Which bots use this
+  CRUD: edit name/tags, delete docs, add new docs
+
+================================================================
+SECTION 6: DATABASES
+================================================================
+
+6.A — DATABASES / ANALYTICS
+FILE: app/(dashboard)/databases/analytics/page.tsx
+
+KPI: Total Databases | Databases in Use | Total Rows | Last Synced
+
+Table: "Database Usage"
+  Columns: Name | Type | Used By | Rows | Last Synced | Status
+
+------------------------------------------------------------
+6.B — DATABASES / ADD DATABASE
+FILE: app/(dashboard)/databases/add/page.tsx
+
+Same 2-panel layout as Add Chunk.
+
+Left:
+  Input: Database name
+  Textarea: Purpose (what data is in here?)
+  Tags (pill input)
+  Select: Type (Order Tracking | Inventory | Leads | Custom)
+  
+  Connection type (radio group, card style):
+    ○ Upload CSV/Excel
+    ○ Google Sheets URL
+    ○ REST API endpoint
+    ○ Custom cURL
+  
+  Conditional inputs:
+    If Upload: drag-drop zone
+    If Google Sheets: URL input + "Connect" button
+    If REST API: URL input + Headers key/value builder
+    If cURL: code-style textarea (font-mono)
+  
+  Search key config:
+    "What field does a customer use to look up their data?"
+    Input: Field name (e.g. "order_id", "email")
+    Description: "The AI will extract this from chat and query your database."
+
+Right: Preview table (first 5 rows of data after connection)
+  [Save Database] button
+
+------------------------------------------------------------
+6.C — DATABASES / ALL DATABASES
+FILE: app/(dashboard)/databases/all/page.tsx
+
+Same card grid as All Chunks.
+  Card includes: type badge | row count | last synced | status dot
+
+================================================================
+SECTION 7: TICKETS
+================================================================
+
+7.A — TICKETS / NEW TICKET
+FILE: app/(dashboard)/tickets/new/page.tsx
+
+Simple single-column form:
+  Input: Subject
+  Textarea: Description (markdown editor — use simple textarea)
+  Select: Priority (Low | Normal | High | Urgent)
+    Each option has a colored dot
+  Select: Assign to (agent list dropdown)
+  Select: Related Session (optional, search sessions)
+  
+  [Create Ticket] button → redirect to /tickets/[id]
+
+------------------------------------------------------------
+7.B — TICKETS / ANALYTICS
+FILE: app/(dashboard)/tickets/analytics/page.tsx
+
+KPI: Open | In Progress | Resolved | Avg Resolution Time
+
+Chart 1: Ticket volume over time (line)
+Chart 2: Priority breakdown (donut)
+Chart 3: Agent resolution table (name | tickets resolved | avg time)
+
+Below: "OPEN TICKETS" list (most urgent first)
+  Each row: priority dot | subject | assignee | created | [View]
+
+------------------------------------------------------------
+7.C — EMBEDDED PEPPERMINT (FULL INBOX)
+  Inside /tickets section, the existing Peppermint iframe
+  renders inside the main content area with Vittain's header on top.
+  The iframe is styled to match: same bg, overflow hidden.
+
+================================================================
+SECTION 8: MESSAGES
+================================================================
+
+8.A — MESSAGES / LIVE MESSAGES
+FILE: app/(dashboard)/messages/live/page.tsx
+
+THIS IS EMBEDDED CHATWOOT — styled to match.
+The Chatwoot iframe renders at full height minus the 48px top bar.
+Overlay the Vittain top bar above it.
+No iframe border. bg-surface wrapper.
+
+------------------------------------------------------------
+8.B — MESSAGES / ALL MESSAGES
+FILE: app/(dashboard)/messages/all/page.tsx
+
+Table view of all messages across sessions.
+Columns: Session | Bot | Channel | Last Message | Mode | Started | Actions
+Filter: channel | mode (AI/Human/Waiting) | date range
+
+Click row → opens a message detail slide-over with full transcript.
+
+================================================================
+SECTION 9: TEMPLATES
+================================================================
+
+9.A — TEMPLATES / CREATE TEMPLATE
+FILE: app/(dashboard)/templates/create/page.tsx
+
+Same step form as Campaign template step (Section 3.B Step 6) but standalone.
+
+Left:
+  Input: Template name
+  Select: Channel (WhatsApp | SMS | Email | Web)
+  Select: Category (Marketing | Support | Utility)
+  Tags input
+  
+  Textarea: Message body
+    Variable support: {name} {company} syntax
+    Character counter
+  
+  If WhatsApp:
+    Submit for Meta approval button
+    Status: "Pending" / "Approved" / "Rejected" badge
+
+Right (sticky): Live preview (phone frame for WhatsApp/SMS, email for Email)
+
+[Save Template] button
+
+------------------------------------------------------------
+9.B — TEMPLATES / MY TEMPLATES
+FILE: app/(dashboard)/templates/all/page.tsx
+
+Filter: channel | category | status (Approved/Pending/All)
+
+Card grid (grid-cols-3):
+  Each card:
+  - Channel icon + category badge
+  - Template name
+  - Body preview (truncated to 2 lines)
+  - Tags
+  - Status badge (Approved=green, Pending=amber, Rejected=red)
+  - [3-dot menu → Edit / Duplicate / Delete / Use in Campaign]
+
+================================================================
+SECTION 10: UTILITY PAGES
+================================================================
+
+10.A — NOTEPAD
+FILE: app/(dashboard)/notepad/page.tsx
+
+Full-width, minimal text area — Notion-style.
+  - No visible editor chrome
+  - Placeholder: "Start typing... (auto-saved)"
+  - Font: Geist Sans, text-base, line-height loose
+  - Content stored in localStorage (no backend needed for MVP)
+  - Auto-save indicator: "Saved" text-xs text-ink-muted top-right
+
+------------------------------------------------------------
+10.B — CHANNELS
+FILE: app/(dashboard)/channels/page.tsx
+
+List of channel integration cards:
+  WhatsApp | SMS | Email | Web Chat
+
+Each card (full-width row):
+  Left: channel icon + name
+  Center: connection status badge + last configured date
+  Right: [Configure] button → opens config slide-over
+
+Config slide-over:
+  WhatsApp: Phone Number ID + Access Token inputs
+  SMS: Provider + API Key
+  Email: SMTP host/port/user/password
+  Web: embed code snippet (copy button, font-mono)
+
+------------------------------------------------------------
+10.C — API KEYS
+FILE: app/(dashboard)/api-keys/page.tsx
+
+Table:
+  Columns: Name | Key (masked: vt_*****abc) | Created | Last Used | Actions
+  [+ Generate Key] top-right button → dialog with key name input
+  
+  On generation: dialog shows full key ONCE with copy button
+  Warning: "This key will only be shown once."
+
+------------------------------------------------------------
+10.D — WEBHOOKS
+FILE: app/(dashboard)/webhooks/page.tsx
+
+Table:
+  Columns: Endpoint URL | Events | Status | Secret | Actions
+  [+ Add Webhook] button → slide-over form
+
+Add webhook form:
+  Input: Endpoint URL
+  Multi-checkbox: Events to subscribe to
+    □ message.received □ handoff.requested □ ticket.created
+    □ campaign.sent □ campaign.completed □ bot.error
+  [Save Webhook]
+
+------------------------------------------------------------
+10.E — ACCOUNT SETTINGS
+FILE: app/(dashboard)/settings/page.tsx
+
+Vertical tab layout:
+  General | Branding | Team | Billing | Security | Danger Zone
+
+General: Company name, website, timezone, language
+Branding: Logo upload, accent color picker
+Team: Agent list table + [Invite Agent] button
+Billing: Plan details + usage meters
+Security: Password change + 2FA toggle + active sessions
+Danger Zone: [Delete Account] with confirm dialog
+
+================================================================
+SECTION 11: EMPTY STATES & LOADING STATES
+================================================================
+
+Every page that fetches data must implement:
+
+LOADING STATE:
+  Use shadcn Skeleton component.
+  KPI cards: Skeleton blocks matching card dimensions
+  Tables: 5 skeleton rows with shimmer
+  Card grids: 6 skeleton cards
+
+EMPTY STATE (standard component — reusable):
+  components/ui/empty-state.tsx
+  
+  Props: icon | title | description | actionLabel | actionHref
+  
+  Renders:
+    Centered in content area
+    Dashed border card (border-dashed border-surface-border)
+    Lucide icon (48px text-ink-muted)
+    Title: text-sm font-medium text-ink
+    Description: text-sm text-ink-secondary max-w-xs text-center
+    Optional: CTA button
+
+ERROR STATE:
+  Same structure but icon: AlertCircle, red tint
+  "Something went wrong" + retry button
+
+================================================================
+SECTION 12: SHARED COMPONENTS TO BUILD
+================================================================
+
+Build these components in components/shared/ — they are used
+across multiple pages.
+
+1. components/shared/kpi-card.tsx
+   Props: label | value | delta | icon | sparklineData
+   
+2. components/shared/status-badge.tsx
+   Props: status ('active'|'paused'|'completed'|'pending'|'error')
+   Returns colored pill badge
+
+3. components/shared/channel-badge.tsx
+   Props: channel ('whatsapp'|'sms'|'email'|'web')
+   Returns channel icon + name pill
+
+4. components/shared/empty-state.tsx
+   Props: icon | title | description | actionLabel? | actionHref?
+
+5. components/shared/data-table.tsx
+   Generic table built on shadcn Table
+   Props: columns | data | onRowClick?
+
+6. components/shared/search-palette.tsx
+   Cmd+K global search using shadcn Command
+   Searches: bots, campaigns, chunks, contacts
+
+7. components/shared/confirm-dialog.tsx
+   Props: title | description | confirmLabel | onConfirm
+   For destructive actions (delete, pause, etc.)
+
+8. components/shared/page-header.tsx
+   Props: title | breadcrumb | rightContent (slot)
+   Renders the top bar for each page
+
+9. components/shared/multi-step-indicator.tsx
+   Props: steps | currentStep
+   Used in Campaign Create and Bot Create wizards
+
+10. components/shared/tag-input.tsx
+    Input that converts comma-separated text to pill badges
+    Backspace removes last tag, click X on pill removes it
+
+================================================================
+SECTION 13: FILE & FOLDER STRUCTURE
+================================================================
+
+app/
+  (dashboard)/
+    layout.tsx                    ← Shell with sidebar + topbar
+    overview/page.tsx             ← Dashboard home
+    campaigns/
+      analytics/page.tsx
+      create/page.tsx             ← Multi-step wizard
+      all/page.tsx
+      [id]/page.tsx               ← Single campaign detail
+      crm/page.tsx
+      whatsapp/page.tsx
+      sms/page.tsx
+      email/page.tsx
+      web/page.tsx
+      settings/page.tsx
+    bots/
+      analytics/page.tsx
+      new/page.tsx                ← Type selection + wizard
+      all/page.tsx
+      [id]/
+        settings/page.tsx
+    knowledge/
+      analytics/page.tsx
+      add/page.tsx
+      all/page.tsx
+      [id]/page.tsx
+    databases/
+      analytics/page.tsx
+      add/page.tsx
+      all/page.tsx
+      [id]/page.tsx
+    tickets/
+      new/page.tsx
+      analytics/page.tsx
+    messages/
+      live/page.tsx
+      all/page.tsx
+    templates/
+      create/page.tsx
+      all/page.tsx
+    notepad/page.tsx
+    channels/page.tsx
+    api-keys/page.tsx
+    webhooks/page.tsx
+    settings/page.tsx
+
+components/
+  layout/
+    sidebar.tsx
+    topbar.tsx
+    sidebar-nav-item.tsx
+    sidebar-section.tsx
+  shared/
+    kpi-card.tsx
+    status-badge.tsx
+    channel-badge.tsx
+    empty-state.tsx
+    data-table.tsx
+    search-palette.tsx
+    confirm-dialog.tsx
+    page-header.tsx
+    multi-step-indicator.tsx
+    tag-input.tsx
+  charts/
+    sparkline.tsx
+    bar-chart.tsx
+    line-chart.tsx
+    donut-chart.tsx
+
+================================================================
+SECTION 14: INTERACTION RULES
+================================================================
+
+Navigation:
+- Clicking a sidebar parent item (with children) expands it in place.
+  It does NOT navigate. Only sub-items navigate.
+- Clicking a sidebar item with no children navigates directly.
+- Active route highlights both parent and sub-item.
+
+Transitions:
+- Page transitions: none (instant, not distracting)
+- Sidebar expand/collapse: 150ms ease-out
+- Modals/sheets: 200ms slide-in from right (sheet) or fade (dialog)
+- Status badges: no animation
+- Skeleton → content: opacity fade 200ms
+
+Feedback:
+- All form submits: show loading spinner in button, disable button
+- Success: sonner toast, top-right, green, 3 seconds, no icon
+- Error: sonner toast, top-right, red, 5 seconds
+- Destructive actions: always require shadcn confirm dialog first
+- Clicking copy buttons: brief "Copied!" tooltip (shadcn Tooltip)
+
+Responsive:
+- Sidebar collapses to icon-only (56px) on tablet (< 1024px)
+- On mobile (< 768px): sidebar becomes a bottom drawer (shadcn Sheet)
+- All KPI card grids: 4 cols → 2 cols → 1 col
+- Campaign/Bot card grids: 3 cols → 2 cols → 1 col
+
+================================================================
+SECTION 15: DESIGN REFERENCE LINKS
+================================================================
+
+These are the references to study before building. Look at the
+interactions, not the visual styles:
+
+Notion design patterns:      https://notion.so (sign up free)
+Linear sidebar patterns:     https://linear.app
+Slack channel nav:           https://slack.com
+shadcn component demos:      https://ui.shadcn.com/docs/components
+shadcn themes:               https://ui.shadcn.com/themes
+Lucide icon browser:         https://lucide.dev/icons/
+Geist Font:                  https://vercel.com/font
+Recharts docs (charts):      https://recharts.org/en-US/examples
+
+================================================================
+END OF FRONTEND BUILD PROMPT
+================================================================
+Total pages: 35+
+Total shared components: 10
+Total chart types: 4 (Sparkline, Bar, Line, Donut)
+Estimated build time: 5-8 days with AI assistance
+================================================================
+
+
+dont make changes in admin dashboard just create a new dashboard for client 

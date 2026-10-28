@@ -1,0 +1,180 @@
+Problem 1 — sessionStorage is the culprit right now
+Your HANDOFF_KEY in sessionStorage was set to 'true' during a previous test and never cleared. On every page load, this line runs:
+js
+let isHandoffMode = sessionStorage.getItem(HANDOFF_KEY) === 'true';
+So widget thinks it's in handoff mode from the moment it loads, and starts polling immediately on open — even if the actual session in the database is back to ai mode. The fix didn't fully work because the sessionStorage state never got reset.
+Quick fix right now — open browser devtools on your test page, run:
+js
+sessionStorage.clear()
+Polling will stop immediately. This confirms this is the root cause.
+Problem 2 — route.ts has no fast-path for normal sessions
+Your sync route does 2 cold Supabase queries every single poll, even when nothing has changed:
+ts
+// Query 1 — fetches ALL messages every time
+const { data: messages } = await supabase
+  .from('messages')
+  .select('role, content, source_url')
+  .eq('session_id', sessionId)
+  .eq('context_id', contextId)
+  .order('created_at', { ascending: true })
+
+// Query 2 — fetches session mode every time
+const { data: sessionData } = await supabase
+  .from('sessions')
+  .select('mode')
+  .eq('session_id', sessionId)
+  .single()
+That's why you see 1800ms — two separate cold Postgres reads with no cache.
+Problem 3 — widget trusts sessionStorage blindly on init
+If HANDOFF_KEY is true in sessionStorage, widget starts polling without verifying against the server first. The server might have reset the session to ai mode but the widget never finds out until it polls and gets mode: 'ai' back — which it does, but only after it's already started the cycle.
+The full fix — route.ts:
+ts
+import { NextRequest, NextResponse } from 'next/server'
+import { supabase } from '@/lib/supabase'
+import { getCorsHeaders, handleOptions } from '@/lib/cors'
+import { Redis } from '@upstash/redis'
+
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL!,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+})
+
+export const dynamic = 'force-dynamic'
+
+export async function OPTIONS(req: NextRequest) {
+  const origin = req.headers.get('origin')
+  const contextId = req.nextUrl.searchParams.get('ctx') ?? ''
+  const cors = await getCorsHeaders(contextId, origin)
+  return handleOptions(cors)
+}
+
+export async function GET(req: NextRequest) {
+  const origin = req.headers.get('origin')
+  const contextId = req.nextUrl.searchParams.get('ctx') ?? ''
+  const sessionId = req.nextUrl.searchParams.get('session_id')
+  const afterCount = parseInt(req.nextUrl.searchParams.get('after') || '0')
+  const cors = await getCorsHeaders(contextId, origin)
+
+  if (!contextId || !sessionId) {
+    return NextResponse.json(
+      { error: 'Missing ctx or session_id' },
+      { status: 400, headers: cors }
+    )
+  }
+
+  try {
+    // ── FAST PATH: Check Redis for session mode first ──────────────────
+    // This is sub-5ms vs 1800ms Supabase cold read
+    const cachedMode = await redis.get(`session_mode:${sessionId}`)
+
+    // If Redis says 'ai' — session is not in handoff, return immediately
+    // This is the most common case — normal AI conversations
+    if (cachedMode === 'ai' || cachedMode === null) {
+      return NextResponse.json(
+        { messages: [], mode: 'ai' },
+        { headers: cors }
+      )
+    }
+
+    // ── SLOW PATH: Only runs when session is actually in handoff mode ──
+    // cachedMode is 'waiting' or 'human' — fetch new messages only
+
+    const { data: messages, error } = await supabase
+      .from('messages')
+      .select('role, content, source_url, created_at')
+      .eq('session_id', sessionId)
+      .eq('context_id', contextId)
+      .order('created_at', { ascending: true })
+
+    if (error) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 500, headers: cors }
+      )
+    }
+
+    // Only send messages the client doesn't already have
+    const newMessages = (messages || []).slice(afterCount)
+
+    // Re-verify mode from DB (Redis might be slightly stale)
+    const { data: sessionData } = await supabase
+      .from('sessions')
+      .select('mode')
+      .eq('session_id', sessionId)
+      .single()
+
+    const mode = sessionData?.mode || 'ai'
+
+    // If mode changed back to 'ai', update Redis so fast path kicks in
+    if (mode === 'ai') {
+      await redis.set(`session_mode:${sessionId}`, 'ai', { ex: 3600 })
+    }
+
+    return NextResponse.json(
+      { messages: newMessages, mode, total: messages?.length || 0 },
+      { headers: cors }
+    )
+
+  } catch (error: any) {
+    return NextResponse.json(
+      { error: error.message },
+      { status: 500, headers: cors }
+    )
+  }
+}
+The full fix — widget.js changes:
+Find and replace these 3 sections:
+Change 1 — pass message count so server only sends new messages:
+js
+// FIND this line in pollForSync:
+let syncUrl = `${API_BASE}/api/chat/sync?ctx=${CTX_ID}&session_id=${sessionId}`;
+
+// REPLACE WITH:
+let syncUrl = `${API_BASE}/api/chat/sync?ctx=${CTX_ID}&session_id=${sessionId}&after=${messages.length}`;
+Change 2 — verify handoff state with server on init, don't trust sessionStorage blindly:
+js
+// FIND the init() function's last block:
+if (isHandoffMode && isOpen) {
+  pollForSync();
+}
+
+// REPLACE WITH:
+if (isHandoffMode) {
+  // Verify against server before starting poll cycle
+  // If server says mode is 'ai', clear the stale sessionStorage flag
+  fetch(`${API_BASE}/api/chat/sync?ctx=${CTX_ID}&session_id=${sessionId}&after=${messages.length}`)
+    .then(r => r.json())
+    .then(data => {
+      if (data.mode === 'ai') {
+        isHandoffMode = false;
+        sessionStorage.setItem(HANDOFF_KEY, 'false');
+      } else if (isOpen) {
+        pollForSync();
+      }
+    })
+    .catch(() => {
+      // Network error — reset handoff to be safe, avoid infinite polling
+      isHandoffMode = false;
+      sessionStorage.setItem(HANDOFF_KEY, 'false');
+    });
+}
+Change 3 — handle new total field from server for accurate new-message detection:
+js
+// FIND in pollForSync:
+if (data.messages && data.messages.length > messages.length) {
+
+// REPLACE WITH:
+if (data.messages && data.messages.length > 0) {
+One more thing — you need to SET the Redis key when handoff is triggered.
+In your /api/chat route, wherever you set session mode to waiting or human in the database, add this right after:
+ts
+// When triggering handoff
+await redis.set(`session_mode:${sessionId}`, 'waiting', { ex: 86400 }) // 24hr TTL
+
+// When agent resolves/closes
+await redis.set(`session_mode:${sessionId}`, 'ai', { ex: 3600 })
+Result after these changes:
+Normal AI chat session → Redis returns null or 'ai' → 0 Supabase queries, sub-5ms response
+Active handoff session → Redis returns 'waiting'/'human' → only then does Supabase run
+Stale sessionStorage from old tests → server corrects it on first init check
+Message fetching → only sends messages the client doesn't already have, not the full history

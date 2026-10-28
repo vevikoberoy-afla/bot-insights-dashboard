@@ -1,0 +1,17 @@
+import {NextRequest,NextResponse} from 'next/server'
+import {supabase} from '@/lib/supabase'
+import {redis} from '@/lib/redis'
+import {verifyWebhookSecret} from '@/lib/webhookSecurity'
+export async function POST(req:NextRequest){
+ const querySecret=req.nextUrl.searchParams.get('secret'),configured=process.env.EMAIL_ESP_WEBHOOK_SECRET;if(!configured||(querySecret!==configured&&!verifyWebhookSecret(req,configured)))return NextResponse.json({error:'Unauthorized'},{status:401})
+ let envelope:any;try{envelope=await req.json()}catch{return NextResponse.json({error:'Invalid JSON'},{status:400})}
+ if(envelope.Type==='SubscriptionConfirmation')return NextResponse.json({received:true,confirmation_required:true,subscribe_url:typeof envelope.SubscribeURL==='string'&&/^https:\/\/sns\.[a-z0-9-]+\.amazonaws\.com\//i.test(envelope.SubscribeURL)?envelope.SubscribeURL:undefined},{status:202})
+ let event:any;try{event=typeof envelope.Message==='string'?JSON.parse(envelope.Message):envelope}catch{return NextResponse.json({error:'Invalid event message'},{status:400})}
+ const type=String(event.eventType||event.notificationType||'').toLowerCase(),headers=event.mail?.headers||[],header=(name:string)=>headers.find((item:any)=>String(item.name).toLowerCase()===name.toLowerCase())?.value,campaignId=header('X-Campaign-ID'),messageId=String(event.mail?.messageId||'')
+ if(!campaignId||!['delivery','bounce','complaint'].includes(type))return NextResponse.json({ignored:true})
+ const addresses=type==='bounce'?(event.bounce?.bounceType==='Permanent'?(event.bounce?.bouncedRecipients||[]):[]):type==='complaint'?(event.complaint?.complainedRecipients||[]):event.delivery?.recipients||[]
+ const emails=addresses.map((item:any)=>String(item.emailAddress||item).toLowerCase()).filter(Boolean);let processed=0,last:any=null
+ for(const email of emails){let query=supabase.from('campaign_recipients').select('id').eq('campaign_id',campaignId).eq('email',email);if(messageId)query=query.eq('esp_message_id',messageId);let recipient=(await query.maybeSingle()).data;if(!recipient&&messageId)recipient=(await supabase.from('campaign_recipients').select('id').eq('campaign_id',campaignId).eq('email',email).maybeSingle()).data;if(!recipient)continue;const mapped=type==='delivery'?'delivered':type==='bounce'?'bounced':'complained',result=await supabase.rpc('bulk_email_record_provider_event',{p_recipient:recipient.id,p_event:mapped,p_provider_event:String(envelope.MessageId||messageId||'')||null});if(!result.error&&result.data?.recorded){processed++;last=result.data;await redis.hincrby(`campaign:${campaignId}:metrics`,mapped,1).catch(()=>{})}}
+ if(last){const sent=Math.max(1,Number(last.sent_count||0)),bounces=Number(last.bounced_count||0),complaints=Number(last.complaint_count||0),trip=(sent>=50&&bounces/sent>.04)||(sent>=100&&complaints/sent>.0008);if(trip){await redis.set(`campaign:${campaignId}:paused`,'reputation',{ex:86400});await redis.hset(`campaign:${campaignId}:metrics`,{status:'paused_circuit_breaker'}).catch(()=>{});await supabase.from('campaigns').update({status:'paused_circuit_breaker',paused_at:new Date().toISOString(),failure_reason:'Automatic reputation protection triggered'}).eq('id',campaignId);await supabase.from('email_campaign_events').insert({client_id:last.client_id,campaign_id:campaignId,event_type:'circuit_paused',metadata:{sent,bounces,complaints}})}}
+ return NextResponse.json({processed})
+}

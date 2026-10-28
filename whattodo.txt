@@ -1,0 +1,250 @@
+The Big Picture
+YOUR BROWSER
+     │
+     ├── sees ONE product, ONE sidebar, ONE domain
+     │
+     ├── /admin pages ──────► Vittain React app
+     │                              │
+     │                              └──► Supabase API (your data)
+     │                              └──► Chatwoot Railway API (inbox data)
+     │
+     └── /inbox pages ──────► Chatwoot Vue app
+                                    │
+                                    └──► Chatwoot Railway API (conversations)
+                                    └──► Vittain API (user session check)
+Everything lives on one domain. The user never sees two products. The sidebar is the glue.
+Layer 1 — The Server Routing Layer
+This is the first thing that must exist. An Nginx reverse proxy sits in front of both apps and decides which app handles which URL.
+User types: yourdomain.com/inbox
+     │
+     ▼
+Nginx reads the URL path
+     │
+     ├── path starts with /inbox ──────► sends request to Vue app (port 4000)
+     ├── path starts with /contacts ───► sends request to Vue app (port 4000)
+     ├── path starts with /reports ────► sends request to Vue app (port 4000)
+     └── everything else ──────────────► sends request to React app (port 3000)
+The user never knows this is happening. Both apps are running simultaneously on the same server on different ports. Nginx is just a traffic director.
+Layer 2 — The Chatwoot Vue App Running Standalone
+The Chatwoot Vue app from app/javascript/ is built and deployed as its own completely independent frontend application. It does not need your React app to function. It only needs:
+1. A built dist/ folder (run npm run build inside app/javascript/)
+2. A connection to your Railway Chatwoot server
+3. A valid chatwoot_token in localStorage to authenticate
+When a user hits /inbox, Nginx serves the Vue app's index.html. The Vue app boots, reads chatwoot_token from localStorage, and starts calling the Railway Chatwoot API directly from the browser:
+Browser (Vue app running at yourdomain.com/inbox)
+     │
+     └──► DIRECT API CALLS ──► https://chatwoot-production-44f4.up.railway.app/api/v1
+                                     │
+                                     └── GET /accounts/1/conversations
+                                     └── GET /accounts/1/contacts
+                                     └── POST /accounts/1/conversations/5/messages
+                                     └── WebSocket wss://railway.../cable (real time)
+The Vue app and the Railway server talk directly. Your React app is not in the middle. No proxy needed for these calls.
+Layer 3 — The Auth Bridge
+This is what makes one login work for both apps.
+STEP 1
+User opens yourdomain.com/login
+React login page loads
+
+STEP 2
+User types email and password and clicks login
+
+STEP 3
+React calls Supabase:
+POST https://yoursupabase.supabase.co/auth/v1/token
+Response: { access_token: "vittain_jwt_..." }
+localStorage.setItem("auth_token", "vittain_jwt_...")
+
+STEP 4
+React IMMEDIATELY calls Chatwoot Railway:
+POST https://chatwoot-production-44f4.up.railway.app/auth/sign_in
+Body: { email: "user@email.com", password: "password" }
+Response: { access_token: "chatwoot_abc...", account_id: 1 }
+localStorage.setItem("chatwoot_token", "chatwoot_abc...")
+localStorage.setItem("chatwoot_account_id", "1")
+
+STEP 5
+Both tokens now sit in localStorage
+React redirects to /admin
+
+STEP 6
+User clicks Inbox in sidebar
+href="/inbox" triggers full page navigation
+Nginx sends them to Vue app
+Vue app boots, reads chatwoot_token from localStorage
+Vue app skips its own login entirely
+Vue app goes straight to the conversations list
+The user logged in once and both apps are authenticated silently.
+Layer 4 — The Sidebar (The Illusion of One Product)
+The sidebar is built twice but looks identical. This is what makes the user feel like one product.
+WHEN USER IS ON /admin (React app is running)
+     │
+     └── React renders SharedSidebar.jsx
+              │
+              ├── Logo: Vittain AI
+              ├── Link: Dashboard (/admin) ◄── React Router handles this
+              ├── Link: AI Bots (/admin/bots) ◄── React Router handles this
+              ├── Link: Knowledge Base (/admin/knowledge) ◄── React Router
+              ├── Link: CRM (/admin/crm) ◄── React Router
+              ├── ────────────────────────────
+              ├── Link: Live Inbox 🔴3 (/inbox) ◄── plain href, leaves React
+              ├── Link: Contacts (/contacts) ◄── plain href, leaves React
+              └── Link: Reports (/reports) ◄── plain href, leaves React
+
+
+WHEN USER IS ON /inbox (Vue app is running)
+     │
+     └── Vue renders SharedSidebar.vue
+              │
+              ├── Logo: Vittain AI (identical)
+              ├── Link: Dashboard (/admin) ◄── plain href, leaves Vue
+              ├── Link: AI Bots (/admin/bots) ◄── plain href, leaves Vue
+              ├── Link: Knowledge Base (/admin/knowledge) ◄── plain href
+              ├── Link: CRM (/admin/crm) ◄── plain href
+              ├── ────────────────────────────
+              ├── Link: Live Inbox 🔴3 (/inbox) ◄── Vue Router handles this
+              ├── Link: Contacts (/contacts) ◄── Vue Router handles this
+              └── Link: Reports (/reports) ◄── Vue Router handles this
+Pixel identical. Same colors, same fonts, same spacing, same logo. The user clicks between them and cannot tell a framework switch happened.
+Layer 5 — Data Flowing FROM Chatwoot API TO Your React Product
+Your Vittain React pages need live Chatwoot data. Here is exactly how each one works:
+VITTAIN DASHBOARD (/admin)
+     │
+     └── on page load, React calls:
+         GET chatwoot.railway.app/api/v1/accounts/1/conversations?status=open
+         Header: api_access_token: {chatwoot_token from localStorage}
+         Response: { data: { meta: { all_count: 14, unassigned_count: 3 } } }
+         React renders: "14 open conversations" card on dashboard
+
+
+VITTAIN CRM PAGE (/admin/crm)
+     │
+     └── when agent opens a contact, React calls:
+         GET chatwoot.railway.app/api/v1/accounts/1/contacts?q={email}
+         Response: full contact object with all Chatwoot conversations
+         React renders: conversation history inside the CRM contact profile
+         Agent can see every message that contact ever sent
+         without leaving the Vittain CRM
+
+
+VITTAIN ANALYTICS PAGE (/admin/analytics)
+     │
+     └── React calls:
+         GET chatwoot.railway.app/api/v1/accounts/1/reports/summary
+         Response: { avg_first_response_time, resolved_conversations_count }
+         React renders: handoff rate chart alongside Vittain's own AI metrics
+         Agent sees Vittain AI deflection % next to human agent resolution %
+
+
+VITTAIN BOT HANDOFF ALERT
+     │
+     └── When Vittain AI bot sets session to "waiting" in Supabase:
+         React backend calls:
+         POST chatwoot.railway.app/api/v1/accounts/1/contacts
+         Body: { name: "John", email: "john@example.com" }
+         Response: { id: 55 }
+
+         Then React calls:
+         POST chatwoot.railway.app/api/v1/accounts/1/conversations
+         Body: { contact_id: 55, inbox_id: 1, additional_attributes: {
+           transcript: "full chat history here"
+         }}
+         Response: { id: 99 }
+
+         React dashboard shows alert:
+         "John needs help — View in Inbox"
+         Clicking it goes to href="/inbox/99"
+         Agent lands directly in Chatwoot Vue inbox on that conversation
+Layer 6 — Data Flowing FROM Your Product TO Chatwoot
+Chatwoot Vue app needs to know about your Vittain product context:
+CHATWOOT CONTACT SIDEBAR (inside a conversation)
+     │
+     └── Vue app reads the contact email from the open conversation
+         Then calls YOUR Vittain API:
+         GET yourdomain.com/api/vittain/contact?email=john@example.com
+         Header: Authorization: Bearer {auth_token from localStorage}
+         Response: {
+           vittain_plan: "pro",
+           bots_active: 2,
+           sessions_this_month: 145,
+           last_bot_used: "Support Bot"
+         }
+         Vue renders this inside the contact panel:
+         "This contact interacted with Support Bot 145 times this month"
+         Agent has full context without opening a second tab
+
+
+VUE APP BOOT VERIFICATION
+     │
+     └── Before mounting, Vue calls:
+         GET yourdomain.com/api/vittain/me
+         Header: Authorization: Bearer {auth_token from localStorage}
+         If 200: proceed to mount
+         If 401: clear all localStorage, redirect to /login
+         This ensures if Vittain session expires,
+         Chatwoot also logs the user out
+Layer 7 — Real Time Data Flow via BroadcastChannel
+This is how the two running apps talk to each other while both are open:
+SCENARIO: Agent has /admin open in one tab and /inbox open in another
+
+Tab 1 (React - /admin)                    Tab 2 (Vue - /inbox)
+        │                                         │
+        │                               New conversation comes in
+        │                               Vue fetches unread count = 5
+        │                               Vue broadcasts:
+        │◄──── vittain_bridge channel ────────────┤
+        │    { event: "UNREAD_COUNT_UPDATED",      │
+        │      payload: { count: 5 } }             │
+        │                                          │
+React sidebar receives event                       │
+React updates badge to show 🔴5                    │
+Agent sees it immediately                          │
+without refreshing the page                        │
+
+
+SCENARIO: Agent logs out from React /admin page
+
+Tab 1 (React - /admin)                    Tab 2 (Vue - /inbox)
+        │                                         │
+Agent clicks logout                               │
+React clears localStorage                         │
+React broadcasts:                                 │
+        ├──── vittain_bridge channel ────────────►│
+        │    { event: "USER_LOGGED_OUT" }         │
+        │                                         │
+                                         Vue receives event
+                                         Vue clears its state
+                                         Vue redirects to /login
+                                         Both tabs logged out simultaneously
+The Complete Data Flow Map
+                    VITTAIN AI PRODUCT
+                    yourdomain.com
+                          │
+           ┌──────────────┼──────────────────┐
+           │              │                  │
+      /admin/*        /inbox/*          /contacts/*
+      React app        Vue app           Vue app
+           │              │                  │
+           │              └──────────────────┘
+           │                      │
+           │              Chatwoot Railway API
+           │         chatwoot-production.railway.app
+           │                      │
+           │         ┌────────────┼────────────┐
+           │         │            │            │
+           │    Conversations  Contacts    Reports
+           │         │            │            │
+           └─────────┘            │            │
+                 │                │            │
+            Supabase DB      Chatwoot DB  Chatwoot DB
+         (Vittain data)    (chat data)  (report data)
+Bottom Line — How It All Connects
+1. ONE domain ──────── user never sees two products
+2. ONE login ───────── logs into both apps simultaneously
+3. ONE sidebar ─────── built twice, looks identical
+4. ONE localStorage ── both apps read same tokens and user data
+5. ONE event bus ────── BroadcastChannel keeps both apps in sync
+6. TWO frontends ────── React owns product pages, Vue owns inbox pages
+7. ONE Chatwoot API ─── both apps call Railway server directly
+8. TWO databases ────── Supabase for Vittain, Chatwoot DB for inbox
+                        connected by sharing contact email as the common key

@@ -1,0 +1,7 @@
+{
+  "crons": [
+    { "path": "/api/cron/knowledge-crawls", "schedule": "* * * * *" },
+    { "path": "/api/cron/booking-notifications", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/data-retention", "schedule": "17 * * * *" }
+  ]
+}

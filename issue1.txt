@@ -1,0 +1,222 @@
+Bug 1 — The widget never starts polling when an agent manually takes over
+The widget only sets isHandoffMode = true when the /api/chat response returns data.source === 'handoff'. But when an agent clicks "Take Over" manually from the dashboard, no chat request is made — so the widget never finds out. It stays in AI mode, never polls, never sees the agent's reply.
+Bug 2 — The sync route returns ALL messages but the widget APPENDS them
+Your sync route returns the full message array. But the updated widget does:
+js
+messages = [...messages, ...data.messages]; // APPENDS
+If sync returns 4 old messages and widget already has 4, it becomes 8 — duplicates everywhere. The old widget replaced (messages = data.messages), the new one appends. They're out of sync.
+Bug 3 — /api/chat doesn't handle sessions already in human mode
+When a customer sends another message while an agent has taken over, your chat route probably still hits the AI. It should detect mode === 'human' and return that mode to the widget so polling starts.
+The complete fix — 3 files:
+Fix 1 — /api/chat/sync/route.ts — slice correctly + add after support:
+ts
+import { NextRequest, NextResponse } from 'next/server'
+import { supabase } from '@/lib/supabase'
+import { Redis } from '@upstash/redis'
+import { getCorsHeaders, handleOptions } from '@/lib/cors'
+
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL!,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+})
+
+export const dynamic = 'force-dynamic'
+
+export async function OPTIONS(req: NextRequest) {
+  const origin = req.headers.get('origin')
+  const contextId = req.nextUrl.searchParams.get('ctx') ?? ''
+  const cors = await getCorsHeaders(contextId, origin)
+  return handleOptions(cors)
+}
+
+export async function GET(req: NextRequest) {
+  const origin = req.headers.get('origin')
+  const contextId = req.nextUrl.searchParams.get('ctx') ?? ''
+  const sessionId = req.nextUrl.searchParams.get('session_id')
+  // Widget tells us how many messages it already has
+  const after = parseInt(req.nextUrl.searchParams.get('after') || '0')
+  const cors = await getCorsHeaders(contextId, origin)
+
+  if (!contextId || !sessionId) {
+    return NextResponse.json(
+      { error: 'Missing ctx or session_id', messages: [], mode: 'ai' },
+      { status: 400, headers: cors }
+    )
+  }
+
+  try {
+    // ── FAST PATH: Check Redis first (sub-5ms) ─────────────────────────
+    const cachedMode = await redis.get(`session_mode:${sessionId}`)
+
+    // If not in handoff — return immediately, no Supabase needed
+    if (!cachedMode || cachedMode === 'ai') {
+      return NextResponse.json(
+        { messages: [], mode: 'ai', total: after },
+        { headers: cors }
+      )
+    }
+
+    // ── SLOW PATH: Only runs for active handoff sessions ───────────────
+    const { data: allMessages, error } = await supabase
+      .from('messages')
+      .select('role, content, source_url, created_at, agent_id')
+      .eq('session_id', sessionId)
+      .eq('context_id', contextId)
+      .order('created_at', { ascending: true })
+
+    if (error) {
+      return NextResponse.json(
+        { error: error.message, messages: [], mode: String(cachedMode) },
+        { status: 500, headers: cors }
+      )
+    }
+
+    const total = allMessages?.length || 0
+
+    // Only send messages the widget doesn't already have
+    const newMessages = (allMessages || []).slice(after)
+
+    // Re-verify mode from DB in case Redis is stale
+    const { data: sessionData } = await supabase
+      .from('sessions')
+      .select('mode')
+      .eq('session_id', sessionId)
+      .single()
+
+    const mode = sessionData?.mode || String(cachedMode)
+
+    // If mode changed back to ai, sync Redis
+    if (mode === 'ai') {
+      await redis.set(`session_mode:${sessionId}`, 'ai', { ex: 3600 })
+    }
+
+    return NextResponse.json(
+      { messages: newMessages, mode, total },
+      { headers: cors }
+    )
+
+  } catch (error: any) {
+    return NextResponse.json(
+      { error: error.message, messages: [], mode: 'ai' },
+      { status: 500, headers: cors }
+    )
+  }
+}
+Fix 2 — /api/chat/route.ts — detect human mode, return it in response:
+Find wherever you handle the incoming chat message and add this check at the very top, before any RAG logic:
+ts
+// ADD THIS at the top of your POST handler, after extracting sessionId:
+
+// Check if session is already under human control
+const cachedMode = await redis.get(`session_mode:${sessionId}`)
+if (cachedMode === 'human') {
+  // Agent has taken over — save customer message but don't call AI
+  await supabase.from('messages').insert({
+    session_id: sessionId,
+    context_id: contextId,
+    content: cleanQuestion,
+    role: 'user',
+    channel: 'web',
+  })
+  
+  return NextResponse.json(
+    {
+      answer: 'An agent is with you shortly. Please wait.',
+      source_url: null,
+      source: 'human',
+      mode: 'human', // ← this is what the widget reads to start polling
+    },
+    { headers: cors }
+  )
+}
+
+// ... rest of your existing RAG pipeline below unchanged ...
+Fix 3 — widget.js — 3 targeted changes:
+Change A — init() — always check server mode, not just when sessionStorage says handoff:
+Find and replace the entire end of your init() function:
+js
+// FIND this block at the end of init():
+if (isHandoffMode) {
+  fetch(`${API_BASE}/api/chat/sync?ctx=${CTX_ID}&session_id=${sessionId}&after=${messages.length}`)
+    .then(r => r.json())
+    .then(data => {
+      if (data.mode === 'ai') {
+        isHandoffMode = false;
+        sessionStorage.setItem(HANDOFF_KEY, 'false');
+      } else if (isOpen) {
+        pollForSync();
+      }
+    })
+    .catch(() => {
+      isHandoffMode = false;
+      sessionStorage.setItem(HANDOFF_KEY, 'false');
+    });
+}
+
+// REPLACE WITH — always check, not conditional:
+fetch(`${API_BASE}/api/chat/sync?ctx=${CTX_ID}&session_id=${sessionId}&after=${messages.length}`)
+  .then(r => r.json())
+  .then(data => {
+    if (data.mode === 'human' || data.mode === 'waiting') {
+      isHandoffMode = true;
+      sessionStorage.setItem(HANDOFF_KEY, 'true');
+      // Pick up any agent messages sent before page loaded
+      if (data.messages && data.messages.length > 0) {
+        messages = [...messages, ...data.messages];
+        saveHistory(messages);
+        renderMessages();
+      }
+      if (isOpen) pollForSync();
+    } else {
+      isHandoffMode = false;
+      sessionStorage.setItem(HANDOFF_KEY, 'false');
+    }
+  })
+  .catch(() => {
+    isHandoffMode = false;
+    sessionStorage.setItem(HANDOFF_KEY, 'false');
+  });
+Change B — sendMessage() — detect human mode from chat response:
+Find this block:
+js
+if (data.source === 'handoff' || data.source === 'waiting') {
+  isHandoffMode = true;
+  sessionStorage.setItem(HANDOFF_KEY, 'true');
+}
+Replace with:
+js
+// Detect handoff from source OR from mode field
+if (
+  data.source === 'handoff' ||
+  data.source === 'waiting' ||
+  data.source === 'human' ||
+  data.mode === 'human' ||
+  data.mode === 'waiting'
+) {
+  isHandoffMode = true;
+  sessionStorage.setItem(HANDOFF_KEY, 'true');
+  // Start polling immediately after handoff detected
+  if (isOpen && !pollTimer) {
+    pollInterval = 3000;
+    pollForSync();
+  }
+}
+Change C — pollForSync() — fix the message append logic:
+Find:
+js
+if (data.messages && data.messages.length > 0) {
+  // New messages arrived!
+  messages = [...messages, ...data.messages];
+This is already correct IF the sync route properly slices with after. The sync route fix in Fix 1 handles this — it returns only new messages. So this line is fine as-is now.
+Also add this in your reply route — set Redis when agent manually takes over (add wherever your dashboard's "Take Over" action fires):
+ts
+// In your "take over" endpoint (wherever agent claims a session):
+await redis.set(`session_mode:${sessionId}`, 'human', { ex: 86400 })
+And when agent resolves/closes:
+ts
+await redis.set(`session_mode:${sessionId}`, 'ai', { ex: 3600 })
+Summary of what was broken:
+Problem	Root Cause	Fix
+Customer can't see agent reply	Widget not polling — agent took over manually, widget never knew	Always check server mode on init, not conditionally
+Customer message after takeover goes to AI	Chat route didn't check session mode	Add human mode early-exit in /api/chat
+Potential duplicates	Sync returned all messages, widget appended them	Sync now slices with after param

@@ -1,0 +1,8 @@
+import {NextRequest,NextResponse} from 'next/server'
+import {requireWorkspace,saasError,SaaSError} from '@/lib/saas/context'
+import {supabase} from '@/lib/supabase'
+import {validateSegmentFilter} from '@/types/bulkEmail'
+import {createHash} from 'crypto'
+import {redis} from '@/lib/redis'
+import {explicitContactAudience} from '@/lib/campaignAudience'
+export async function POST(req:NextRequest){try{const ctx=await requireWorkspace(null,'campaigns'),body=await req.json();let filter;try{filter=validateSegmentFilter(body.filterAst||{combinator:'AND',rules:[]})}catch(error:any){throw new SaaSError('INVALID_INPUT',String(error?.message||'Invalid audience filter.'),400)}const botId=String(body.botId||''),contactIds=await explicitContactAudience(ctx.workspaceId,body.selectedContactIds);const bot=(await supabase.from('bots').select('id').eq('id',botId).eq('client_id',ctx.workspaceId).maybeSingle()).data;if(!bot)throw new SaaSError('INVALID_INPUT','Choose a workspace bot.',400);const hash=createHash('sha256').update(`${ctx.workspaceId}|${botId}|${JSON.stringify(filter)}|${contactIds.join(',')}`).digest('hex'),key=`campaign:audience-preview:${hash}`,cached=await redis.get<any>(key).catch(()=>null);if(cached)return NextResponse.json(cached,{headers:{'Cache-Control':'private, max-age=10','X-Audience-Cache':'HIT'}});const{data,error}=await supabase.rpc('bulk_email_preview_audience_v3',{p_client:ctx.workspaceId,p_bot:botId,p_ast:filter,p_contact_ids:contactIds});if(error)throw error;const result={count:Number(data?.count||0),sampleContacts:data?.sample||[]};await redis.set(key,result,{ex:30}).catch(()=>{});return NextResponse.json(result,{headers:{'Cache-Control':'private, max-age=10','X-Audience-Cache':'MISS'}})}catch(error){return saasError(error)}}

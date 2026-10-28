@@ -1,0 +1,2542 @@
+================================================================
+VITTAIN AI — COMPLETE BUILD PROMPT FOR AI AGENT
+================================================================
+Product: Vittain AI
+Type: Multi-tenant B2B SaaS — AI Customer Engagement + Marketing Platform
+Stack: Next.js 14 (App Router), TypeScript, React, Tailwind CSS,
+       Supabase (PostgreSQL + pgvector), Upstash Redis, Vercel
+Integrations: Chatwoot CE (human inbox), Dittofeed (campaigns)
+AI: Groq API (LLM), Google Gemini API (embeddings)
+================================================================
+
+READ THIS FULLY BEFORE WRITING A SINGLE LINE OF CODE.
+Build one file at a time. Confirm completion before moving to the next.
+Do not install any packages not listed here.
+Do not use any UI library other than Tailwind CSS.
+Use TypeScript strict mode everywhere. No "any" types.
+All API calls must be server-side only. Never expose secrets to the client.
+Use Next.js 14 App Router patterns exclusively. No pages/ directory.
+
+================================================================
+SECTION 1: WHAT IS ALREADY BUILT (DO NOT REBUILD)
+================================================================
+
+The following already exists in the codebase. Do not touch or
+recreate any of this. Only extend or connect to it.
+
+EXISTING DATABASE TABLES (Supabase):
+- clients         → root business/tenant entity
+- bots            → AI agents owned by a client
+- datasets        → isolated knowledge banks linked to bots
+- chunks          → vector chunks for RAG search
+- bot_datasets    → join table linking bots to datasets
+- data_sources    → external DB connections (Sheets, REST)
+- bot_data_sources→ join table linking bots to data sources
+- sessions        → chat sessions scoped to a bot_id
+- messages        → chat messages scoped to a session_id
+- waitlist        → email capture on marketing site
+
+EXISTING API ROUTES:
+- /api/chat           → main AI chat endpoint (Groq + Gemini RAG)
+- /api/chat/sync      → polling endpoint for human handoff replies
+- /api/datasets       → CRUD for knowledge base datasets
+- /api/inbox          → admin inbox API
+
+EXISTING FRONTEND PAGES:
+- /                   → marketing landing page
+- /admin              → admin dashboard home (KPI cards, client grid)
+- /admin/analytics    → global analytics
+- /admin/conversations→ conversations viewer
+- /admin/settings     → API key management
+- /admin/webhooks     → webhook registration
+- /admin/audit        → audit logs
+- /admin/client/[id]  → client manager with these tabs:
+    Tab 1: Overview
+    Tab 2: Knowledge Base (legacy)
+    Tab 3: Analytics
+    Tab 4: WhatsApp
+    Tab 5: Email
+    Tab 6: CRM
+    Tab 7: Campaigns (currently empty — you will fill this)
+    Tab 8: Bots
+    Tab 9: KB Library
+    Tab 10: Integrations
+
+EXISTING WIDGET:
+- widget.js           → vanilla JS chat bubble injected on client websites
+                        handles AI chat, polling, basic handoff display
+
+EXISTING ENV VARS (already in .env.local):
+- NEXT_PUBLIC_SUPABASE_URL
+- NEXT_PUBLIC_SUPABASE_ANON_KEY
+- SUPABASE_SERVICE_ROLE_KEY
+- GROQ_API_KEY
+- GEMINI_API_KEY
+- UPSTASH_REDIS_REST_URL
+- UPSTASH_REDIS_REST_TOKEN
+
+================================================================
+SECTION 2: WHAT YOU ARE BUILDING
+================================================================
+
+You are adding 3 integration layers to the existing product:
+
+LAYER 1: CHATWOOT INTEGRATION
+- Purpose: Human agent inbox + handoff management
+- Chatwoot runs as a separate service on Oracle Cloud VM
+- Your Next.js app connects to it via REST API and receives webhooks
+- Agents see all conversations in Chatwoot UI embedded inside
+  the Vittain AI dashboard via iframe
+
+LAYER 2: DITTOFEED INTEGRATION
+- Purpose: Campaign marketing, WhatsApp/Email blasts, journey automation
+- Dittofeed runs as a separate service on Oracle Cloud VM
+- Your Next.js app syncs contacts to it via official npm SDK
+- Campaign builder is embedded inside Vittain AI dashboard via iframe
+
+LAYER 3: WHATSAPP ROUTER
+- Purpose: Single webhook URL for Meta WhatsApp Business API
+- All inbound WhatsApp messages hit one endpoint in your Next.js app
+- Your router decides: send to AI bot OR forward to Chatwoot human agent
+- Dittofeed sends outbound campaigns via Meta API separately
+
+================================================================
+SECTION 3: ENVIRONMENT VARIABLES TO ADD
+================================================================
+
+Add these to .env.local (in addition to existing ones):
+
+# ── Chatwoot (running on Oracle Cloud VM) ──
+CHATWOOT_URL=http://YOUR_ORACLE_IP:3000
+CHATWOOT_API_TOKEN=get_from_chatwoot_settings_page
+CHATWOOT_ACCOUNT_ID=1
+CHATWOOT_WEBHOOK_SECRET=generate_random_32_char_string
+
+# ── Dittofeed (running on Oracle Cloud VM) ──
+DITTOFEED_URL=http://YOUR_ORACLE_IP:3001
+DITTOFEED_WRITE_KEY=get_from_dittofeed_settings_page
+
+# ── Meta WhatsApp Business API ──
+WHATSAPP_VERIFY_TOKEN=generate_random_string_for_webhook_verification
+WHATSAPP_ACCESS_TOKEN=get_from_meta_developer_dashboard
+WHATSAPP_PHONE_NUMBER_ID=get_from_meta_developer_dashboard
+
+# ── Public URLs (for iframes) ──
+NEXT_PUBLIC_CHATWOOT_URL=http://YOUR_ORACLE_IP:3000
+NEXT_PUBLIC_DITTOFEED_URL=http://YOUR_ORACLE_IP:3001
+
+================================================================
+SECTION 4: NPM PACKAGES TO INSTALL
+================================================================
+
+Run this once before starting:
+
+npm install @dittofeed/sdk-node
+
+That is the only new package. Do not install anything else.
+
+================================================================
+SECTION 5: DATABASE MIGRATIONS
+================================================================
+
+FILE TO CREATE:
+supabase/migrations/20240101000000_add_integrations.sql
+
+This SQL file must be run in the Supabase SQL editor.
+It extends existing tables — it does NOT recreate them.
+
+----------------------------------------------------------------
+CONTENT OF: supabase/migrations/20240101000000_add_integrations.sql
+----------------------------------------------------------------
+
+-- Extend the bots table
+ALTER TABLE bots
+  ADD COLUMN IF NOT EXISTS chatwoot_inbox_id INTEGER,
+  ADD COLUMN IF NOT EXISTS whatsapp_phone_number_id TEXT,
+  ADD COLUMN IF NOT EXISTS whatsapp_access_token TEXT;
+
+-- Extend the sessions table
+ALTER TABLE sessions
+  ADD COLUMN IF NOT EXISTS chatwoot_conversation_id INTEGER,
+  ADD COLUMN IF NOT EXISTS chatwoot_contact_id INTEGER,
+  ADD COLUMN IF NOT EXISTS mode TEXT DEFAULT 'ai'
+    CHECK (mode IN ('ai', 'waiting', 'human', 'resolved')),
+  ADD COLUMN IF NOT EXISTS channel TEXT DEFAULT 'widget'
+    CHECK (channel IN ('widget', 'whatsapp', 'email')),
+  ADD COLUMN IF NOT EXISTS campaign_id TEXT,
+  ADD COLUMN IF NOT EXISTS last_human_message_at TIMESTAMP WITH TIME ZONE;
+
+-- Extend the messages table
+ALTER TABLE messages
+  ADD COLUMN IF NOT EXISTS sender_type TEXT DEFAULT 'ai'
+    CHECK (sender_type IN ('ai', 'human', 'visitor')),
+  ADD COLUMN IF NOT EXISTS chatwoot_message_id INTEGER;
+
+-- Extend the contacts table (if it exists, else create it)
+CREATE TABLE IF NOT EXISTS contacts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+  name TEXT,
+  email TEXT,
+  phone TEXT,
+  chatwoot_contact_id INTEGER,
+  dittofeed_user_id TEXT,
+  segment TEXT DEFAULT 'general',
+  channel TEXT DEFAULT 'widget',
+  last_seen_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Index for fast phone lookups (WhatsApp routing)
+CREATE INDEX IF NOT EXISTS idx_contacts_phone ON contacts(phone);
+CREATE INDEX IF NOT EXISTS idx_contacts_client ON contacts(client_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_chatwoot ON sessions(chatwoot_conversation_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_mode ON sessions(mode);
+
+-- Enable RLS on contacts
+ALTER TABLE contacts ENABLE ROW LEVEL SECURITY;
+
+-- RLS policy: clients can only see their own contacts
+CREATE POLICY "clients_own_contacts" ON contacts
+  FOR ALL USING (
+    client_id IN (
+      SELECT id FROM clients WHERE id = client_id
+    )
+  );
+
+----------------------------------------------------------------
+END OF MIGRATION FILE
+----------------------------------------------------------------
+
+================================================================
+SECTION 6: TYPESCRIPT TYPES
+================================================================
+
+FILE TO CREATE: types/chatwoot.ts
+
+----------------------------------------------------------------
+CONTENT OF: types/chatwoot.ts
+----------------------------------------------------------------
+
+export interface ChatwootContact {
+  id: number
+  name: string
+  email?: string
+  phone_number?: string
+  created_at: string
+  additional_attributes?: Record<string, unknown>
+}
+
+export interface ChatwootConversation {
+  id: number
+  status: 'open' | 'resolved' | 'pending' | 'snoozed'
+  inbox_id: number
+  contact: ChatwootContact
+  messages?: ChatwootMessage[]
+  created_at: string
+  updated_at: string
+}
+
+export interface ChatwootMessage {
+  id: number
+  content: string
+  message_type: 'incoming' | 'outgoing' | 'activity' | 'template'
+  sender?: {
+    id: number
+    name: string
+    type: 'agent' | 'contact' | 'bot'
+  }
+  created_at: string
+  private?: boolean
+}
+
+export interface ChatwootInbox {
+  id: number
+  name: string
+  channel_type: string
+  webhook_url?: string
+}
+
+export interface ChatwootWebhookPayload {
+  event: string
+  id?: number
+  content?: string
+  message_type?: string
+  conversation?: ChatwootConversation
+  sender?: {
+    id: number
+    name: string
+    type: string
+  }
+  account?: {
+    id: number
+    name: string
+  }
+}
+
+export interface CreateContactParams {
+  name: string
+  phone_number?: string
+  email?: string
+  additional_attributes?: Record<string, unknown>
+}
+
+export interface CreateConversationParams {
+  inbox_id: number
+  contact_id: number
+  status?: 'open' | 'pending'
+  additional_attributes?: Record<string, unknown>
+}
+
+----------------------------------------------------------------
+END OF: types/chatwoot.ts
+----------------------------------------------------------------
+
+
+FILE TO CREATE: types/dittofeed.ts
+
+----------------------------------------------------------------
+CONTENT OF: types/dittofeed.ts
+----------------------------------------------------------------
+
+export interface DittofeedIdentifyParams {
+  userId: string
+  traits: {
+    name?: string
+    email?: string
+    phone?: string
+    segment?: string
+    channel?: string
+    clientId?: string
+    createdAt?: string
+    [key: string]: unknown
+  }
+}
+
+export interface DittofeedTrackParams {
+  userId: string
+  event: string
+  properties?: {
+    campaignId?: string
+    botId?: string
+    message?: string
+    channel?: string
+    [key: string]: unknown
+  }
+}
+
+----------------------------------------------------------------
+END OF: types/dittofeed.ts
+----------------------------------------------------------------
+
+================================================================
+SECTION 7: API CLIENT LIBRARIES
+================================================================
+
+FILE TO CREATE: lib/chatwoot.ts
+
+----------------------------------------------------------------
+CONTENT OF: lib/chatwoot.ts
+----------------------------------------------------------------
+
+/**
+ * Chatwoot API Client
+ * Connects to self-hosted Chatwoot instance on Oracle Cloud VM.
+ * All calls are server-side only. Never import this in client components.
+ */
+
+import type {
+  ChatwootContact,
+  ChatwootConversation,
+  ChatwootMessage,
+  ChatwootInbox,
+  CreateContactParams,
+  CreateConversationParams,
+} from '@/types/chatwoot'
+
+const CHATWOOT_URL = process.env.CHATWOOT_URL
+const TOKEN = process.env.CHATWOOT_API_TOKEN
+const ACCOUNT = process.env.CHATWOOT_ACCOUNT_ID
+
+if (!CHATWOOT_URL || !TOKEN || !ACCOUNT) {
+  console.warn('[Chatwoot] Missing env vars — integration disabled')
+}
+
+/** Base fetch wrapper with auth headers */
+async function chatwootFetch<T>(
+  path: string,
+  options: RequestInit = {}
+): Promise<T> {
+  const url = `${CHATWOOT_URL}/api/v1/accounts/${ACCOUNT}${path}`
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'api_access_token': TOKEN!,
+      ...options.headers,
+    },
+  })
+  if (!res.ok) {
+    const error = await res.text()
+    throw new Error(`Chatwoot API error ${res.status}: ${error}`)
+  }
+  return res.json() as Promise<T>
+}
+
+/** Create a new inbox for a bot */
+export async function createInbox(botName: string): Promise<ChatwootInbox> {
+  return chatwootFetch<ChatwootInbox>('/inboxes', {
+    method: 'POST',
+    body: JSON.stringify({
+      name: botName,
+      channel: {
+        type: 'api',
+        webhook_url: `${process.env.NEXTAUTH_URL}/api/webhooks/chatwoot`,
+      },
+    }),
+  })
+}
+
+/** Find or create a contact by phone number */
+export async function findOrCreateContact(
+  params: CreateContactParams
+): Promise<ChatwootContact> {
+  // Search first to avoid duplicates
+  if (params.phone_number) {
+    try {
+      const search = await chatwootFetch<{ payload: ChatwootContact[] }>(
+        `/contacts/search?q=${encodeURIComponent(params.phone_number)}&page=1`
+      )
+      if (search.payload && search.payload.length > 0) {
+        return search.payload[0]
+      }
+    } catch {
+      // Contact not found — create new one below
+    }
+  }
+  return chatwootFetch<ChatwootContact>('/contacts', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  })
+}
+
+/** Create a new conversation linked to a contact and inbox */
+export async function createConversation(
+  params: CreateConversationParams
+): Promise<ChatwootConversation> {
+  return chatwootFetch<ChatwootConversation>('/conversations', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  })
+}
+
+/** Send a message to an existing conversation */
+export async function sendMessage(
+  conversationId: number,
+  content: string,
+  type: 'incoming' | 'outgoing',
+  isPrivate = false
+): Promise<ChatwootMessage> {
+  return chatwootFetch<ChatwootMessage>(
+    `/conversations/${conversationId}/messages`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        content,
+        message_type: type,
+        private: isPrivate,
+      }),
+    }
+  )
+}
+
+/** Toggle conversation status to open (triggers agent alert) */
+export async function triggerHandoff(
+  conversationId: number
+): Promise<ChatwootConversation> {
+  return chatwootFetch<ChatwootConversation>(
+    `/conversations/${conversationId}/toggle_status`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ status: 'open' }),
+    }
+  )
+}
+
+/** Add a label to a conversation */
+export async function addLabel(
+  conversationId: number,
+  label: string
+): Promise<void> {
+  await chatwootFetch(`/conversations/${conversationId}/labels`, {
+    method: 'POST',
+    body: JSON.stringify({ labels: [label] }),
+  })
+}
+
+/** Get all messages for a conversation */
+export async function getMessages(
+  conversationId: number
+): Promise<ChatwootMessage[]> {
+  const res = await chatwootFetch<{ payload: ChatwootMessage[] }>(
+    `/conversations/${conversationId}/messages`
+  )
+  return res.payload ?? []
+}
+
+/** Resolve a conversation when session ends */
+export async function resolveConversation(
+  conversationId: number
+): Promise<void> {
+  await chatwootFetch(`/conversations/${conversationId}/toggle_status`, {
+    method: 'POST',
+    body: JSON.stringify({ status: 'resolved' }),
+  })
+}
+
+----------------------------------------------------------------
+END OF: lib/chatwoot.ts
+----------------------------------------------------------------
+
+
+FILE TO CREATE: lib/dittofeed.ts
+
+----------------------------------------------------------------
+CONTENT OF: lib/dittofeed.ts
+----------------------------------------------------------------
+
+/**
+ * Dittofeed Integration
+ * Uses the official @dittofeed/sdk-node package (MIT licensed).
+ * Syncs contacts and tracks events for campaign targeting.
+ * All calls are server-side only.
+ */
+
+import DittofeedSdk from '@dittofeed/sdk-node'
+import type {
+  DittofeedIdentifyParams,
+  DittofeedTrackParams,
+} from '@/types/dittofeed'
+
+let sdk: InstanceType<typeof DittofeedSdk> | null = null
+
+function getSDK(): InstanceType<typeof DittofeedSdk> {
+  if (!sdk) {
+    if (!process.env.DITTOFEED_URL || !process.env.DITTOFEED_WRITE_KEY) {
+      throw new Error('[Dittofeed] Missing DITTOFEED_URL or DITTOFEED_WRITE_KEY')
+    }
+    sdk = new DittofeedSdk({
+      host: process.env.DITTOFEED_URL,
+      writeKey: process.env.DITTOFEED_WRITE_KEY,
+    })
+  }
+  return sdk
+}
+
+/**
+ * Sync a contact to Dittofeed CRM.
+ * Call this whenever a new contact is created in Supabase.
+ * This makes the contact available for campaign segmentation.
+ */
+export async function identifyContact(
+  params: DittofeedIdentifyParams
+): Promise<void> {
+  try {
+    const df = getSDK()
+    await df.identify({
+      userId: params.userId,
+      traits: params.traits,
+    })
+    await df.flush()
+  } catch (error) {
+    // Non-fatal — log and continue. Dittofeed failure should not
+    // break the main chat flow.
+    console.error('[Dittofeed] identify failed:', error)
+  }
+}
+
+/**
+ * Track a behavioral event for a contact.
+ * Used to trigger journey automations and segment updates.
+ *
+ * Example events:
+ * - 'chat_started'
+ * - 'asked_about_pricing'
+ * - 'handoff_requested'
+ * - 'campaign_replied'
+ */
+export async function trackEvent(
+  params: DittofeedTrackParams
+): Promise<void> {
+  try {
+    const df = getSDK()
+    await df.track({
+      userId: params.userId,
+      event: params.event,
+      properties: params.properties,
+    })
+    await df.flush()
+  } catch (error) {
+    console.error('[Dittofeed] track failed:', error)
+  }
+}
+
+----------------------------------------------------------------
+END OF: lib/dittofeed.ts
+----------------------------------------------------------------
+
+================================================================
+SECTION 8: API ROUTES TO CREATE
+================================================================
+
+----------------------------------------------------------------
+FILE: app/api/whatsapp/verify/route.ts
+PURPOSE: Meta webhook verification (required once to connect WhatsApp)
+----------------------------------------------------------------
+
+import { NextRequest } from 'next/server'
+
+export async function GET(req: NextRequest) {
+  const mode = req.nextUrl.searchParams.get('hub.mode')
+  const token = req.nextUrl.searchParams.get('hub.verify_token')
+  const challenge = req.nextUrl.searchParams.get('hub.challenge')
+
+  if (mode === 'subscribe' && token === process.env.WHATSAPP_VERIFY_TOKEN) {
+    return new Response(challenge, { status: 200 })
+  }
+  return new Response('Forbidden', { status: 403 })
+}
+
+----------------------------------------------------------------
+END FILE
+----------------------------------------------------------------
+
+
+----------------------------------------------------------------
+FILE: app/api/whatsapp/incoming/route.ts
+PURPOSE: Central router for ALL inbound WhatsApp messages.
+         Decides: send to AI bot OR forward to Chatwoot human agent.
+         This is the single webhook URL you register in Meta dashboard.
+----------------------------------------------------------------
+
+import { NextRequest } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { sendMessage as chatwootSendMessage } from '@/lib/chatwoot'
+import { trackEvent } from '@/lib/dittofeed'
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json()
+
+    // Meta sends a nested payload structure
+    const entry = body?.entry?.[0]
+    const change = entry?.changes?.[0]
+    const value = change?.value
+
+    // Ignore status updates (delivered, read receipts) — only handle messages
+    if (!value?.messages || value.messages.length === 0) {
+      return Response.json({ status: 'ignored' })
+    }
+
+    const message = value.messages[0]
+    const from = message.from                // customer's WhatsApp number
+    const messageText = message.text?.body   // message content
+    const phoneNumberId = value.metadata?.phone_number_id
+
+    if (!messageText || !from) {
+      return Response.json({ status: 'ignored' })
+    }
+
+    const supabase = createClient()
+
+    // 1. Find the bot linked to this WhatsApp number
+    const { data: bot } = await supabase
+      .from('bots')
+      .select('id, client_id, chatwoot_inbox_id, whatsapp_phone_number_id')
+      .eq('whatsapp_phone_number_id', phoneNumberId)
+      .single()
+
+    if (!bot) {
+      console.error('[WhatsApp] No bot found for phone_number_id:', phoneNumberId)
+      return Response.json({ status: 'no_bot_found' })
+    }
+
+    // 2. Find or create contact in Supabase
+    let { data: contact } = await supabase
+      .from('contacts')
+      .select('*')
+      .eq('phone', from)
+      .eq('client_id', bot.client_id)
+      .single()
+
+    if (!contact) {
+      const { data: newContact } = await supabase
+        .from('contacts')
+        .insert({
+          client_id: bot.client_id,
+          phone: from,
+          channel: 'whatsapp',
+        })
+        .select()
+        .single()
+      contact = newContact
+    }
+
+    // 3. Find active session for this contact
+    const { data: session } = await supabase
+      .from('sessions')
+      .select('*')
+      .eq('bot_id', bot.id)
+      .in('mode', ['ai', 'waiting', 'human'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+
+    // 4. Route based on session mode
+    if (session?.mode === 'human' && session?.chatwoot_conversation_id) {
+      // Active human handoff — forward message to Chatwoot agent
+      await chatwootSendMessage(
+        session.chatwoot_conversation_id,
+        messageText,
+        'incoming'
+      )
+
+      // Save to our messages table too
+      await supabase.from('messages').insert({
+        session_id: session.id,
+        content: messageText,
+        sender_type: 'visitor',
+        role: 'user',
+      })
+
+      return Response.json({ status: 'forwarded_to_human' })
+    }
+
+    // 5. AI handles the conversation
+    // Create new session if none exists
+    let activeSessionId = session?.id
+    if (!session) {
+      const { data: newSession } = await supabase
+        .from('sessions')
+        .insert({
+          bot_id: bot.id,
+          mode: 'ai',
+          channel: 'whatsapp',
+        })
+        .select()
+        .single()
+      activeSessionId = newSession?.id
+
+      // Track new conversation in Dittofeed
+      if (contact && activeSessionId) {
+        await trackEvent({
+          userId: contact.id,
+          event: 'whatsapp_conversation_started',
+          properties: { botId: bot.id, channel: 'whatsapp' },
+        })
+      }
+    }
+
+    // 6. Call your existing AI chat endpoint internally
+    const aiResponse = await fetch(
+      `${process.env.NEXTAUTH_URL}/api/chat`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: messageText,
+          sessionId: activeSessionId,
+          botId: bot.id,
+          channel: 'whatsapp',
+        }),
+      }
+    )
+
+    const aiData = await aiResponse.json()
+
+    // 7. Send AI reply back via Meta WhatsApp API
+    await fetch(
+      `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          to: from,
+          type: 'text',
+          text: { body: aiData.reply },
+        }),
+      }
+    )
+
+    return Response.json({ status: 'ai_handled' })
+
+  } catch (error) {
+    console.error('[WhatsApp Incoming] Error:', error)
+    return Response.json({ error: 'Internal error' }, { status: 500 })
+  }
+}
+
+----------------------------------------------------------------
+END FILE
+----------------------------------------------------------------
+
+
+----------------------------------------------------------------
+FILE: app/api/chat/init/route.ts
+PURPOSE: Called when a visitor opens the widget on a client's website.
+         Creates a contact + Chatwoot conversation for this session.
+----------------------------------------------------------------
+
+import { NextRequest } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import {
+  findOrCreateContact,
+  createConversation,
+} from '@/lib/chatwoot'
+import { identifyContact } from '@/lib/dittofeed'
+
+export async function POST(req: NextRequest) {
+  try {
+    const { botId, visitorName, visitorEmail } = await req.json()
+
+    if (!botId) {
+      return Response.json({ error: 'botId is required' }, { status: 400 })
+    }
+
+    const supabase = createClient()
+
+    // 1. Get bot details including Chatwoot inbox ID
+    const { data: bot, error: botError } = await supabase
+      .from('bots')
+      .select('id, client_id, chatwoot_inbox_id')
+      .eq('id', botId)
+      .single()
+
+    if (botError || !bot) {
+      return Response.json({ error: 'Bot not found' }, { status: 404 })
+    }
+
+    // 2. Create a new session in Supabase
+    const { data: session, error: sessionError } = await supabase
+      .from('sessions')
+      .insert({
+        bot_id: botId,
+        mode: 'ai',
+        channel: 'widget',
+      })
+      .select()
+      .single()
+
+    if (sessionError || !session) {
+      return Response.json({ error: 'Session creation failed' }, { status: 500 })
+    }
+
+    // 3. Create/find contact in Supabase
+    const { data: contact } = await supabase
+      .from('contacts')
+      .insert({
+        client_id: bot.client_id,
+        name: visitorName ?? 'Website Visitor',
+        email: visitorEmail ?? null,
+        channel: 'widget',
+      })
+      .select()
+      .single()
+
+    // 4. Create contact + conversation in Chatwoot (if inbox exists)
+    if (bot.chatwoot_inbox_id) {
+      try {
+        const chatwootContact = await findOrCreateContact({
+          name: visitorName ?? 'Website Visitor',
+          email: visitorEmail,
+        })
+
+        const chatwootConversation = await createConversation({
+          inbox_id: bot.chatwoot_inbox_id,
+          contact_id: chatwootContact.id,
+          status: 'pending',
+        })
+
+        // Save Chatwoot IDs back to session
+        await supabase
+          .from('sessions')
+          .update({
+            chatwoot_conversation_id: chatwootConversation.id,
+            chatwoot_contact_id: chatwootContact.id,
+          })
+          .eq('id', session.id)
+
+        // Sync contact to Dittofeed for campaign targeting
+        if (contact) {
+          await identifyContact({
+            userId: contact.id,
+            traits: {
+              name: visitorName ?? 'Website Visitor',
+              email: visitorEmail,
+              channel: 'widget',
+              clientId: bot.client_id,
+              createdAt: new Date().toISOString(),
+            },
+          })
+        }
+      } catch (chatwootError) {
+        // Non-fatal — AI chat still works without Chatwoot
+        console.error('[Chat Init] Chatwoot setup failed:', chatwootError)
+      }
+    }
+
+    return Response.json({
+      sessionId: session.id,
+      status: 'ready',
+    })
+
+  } catch (error) {
+    console.error('[Chat Init] Error:', error)
+    return Response.json({ error: 'Internal error' }, { status: 500 })
+  }
+}
+
+----------------------------------------------------------------
+END FILE
+----------------------------------------------------------------
+
+
+----------------------------------------------------------------
+FILE: app/api/chat/handoff/route.ts
+PURPOSE: Called when the AI detects [HANDOFF] flag or user requests human.
+         Flips session to 'waiting', alerts Chatwoot agents.
+----------------------------------------------------------------
+
+import { NextRequest } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { triggerHandoff, addLabel } from '@/lib/chatwoot'
+import { trackEvent } from '@/lib/dittofeed'
+
+export async function POST(req: NextRequest) {
+  try {
+    const { sessionId } = await req.json()
+
+    if (!sessionId) {
+      return Response.json({ error: 'sessionId required' }, { status: 400 })
+    }
+
+    const supabase = createClient()
+
+    // 1. Get session with Chatwoot conversation ID
+    const { data: session, error } = await supabase
+      .from('sessions')
+      .select('*, contacts(*)')
+      .eq('id', sessionId)
+      .single()
+
+    if (error || !session) {
+      return Response.json({ error: 'Session not found' }, { status: 404 })
+    }
+
+    // 2. Update session mode to 'waiting'
+    await supabase
+      .from('sessions')
+      .update({ mode: 'waiting' })
+      .eq('id', sessionId)
+
+    // 3. Alert Chatwoot agents
+    if (session.chatwoot_conversation_id) {
+      try {
+        await triggerHandoff(session.chatwoot_conversation_id)
+        await addLabel(session.chatwoot_conversation_id, 'needs-human')
+      } catch (chatwootError) {
+        console.error('[Handoff] Chatwoot alert failed:', chatwootError)
+      }
+    }
+
+    // 4. Track in Dittofeed
+    if (session.contacts?.id) {
+      await trackEvent({
+        userId: session.contacts.id,
+        event: 'handoff_requested',
+        properties: { sessionId, channel: session.channel },
+      })
+    }
+
+    return Response.json({ status: 'waiting', message: 'Human agent alerted' })
+
+  } catch (error) {
+    console.error('[Handoff] Error:', error)
+    return Response.json({ error: 'Internal error' }, { status: 500 })
+  }
+}
+
+----------------------------------------------------------------
+END FILE
+----------------------------------------------------------------
+
+
+----------------------------------------------------------------
+FILE: app/api/chat/sync/route.ts
+PURPOSE: Widget polls this every 3 seconds to check for human replies.
+         Returns new messages if agent has replied.
+         UPDATE THIS FILE — it already exists, extend it with this logic.
+----------------------------------------------------------------
+
+import { NextRequest } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+
+export async function GET(req: NextRequest) {
+  try {
+    const sessionId = req.nextUrl.searchParams.get('sessionId')
+    const since = req.nextUrl.searchParams.get('since') // ISO timestamp
+
+    if (!sessionId) {
+      return Response.json({ error: 'sessionId required' }, { status: 400 })
+    }
+
+    const supabase = createClient()
+
+    // Get current session mode
+    const { data: session } = await supabase
+      .from('sessions')
+      .select('mode')
+      .eq('id', sessionId)
+      .single()
+
+    if (!session) {
+      return Response.json({ error: 'Session not found' }, { status: 404 })
+    }
+
+    // If AI is handling — no need to poll, return empty
+    if (session.mode === 'ai') {
+      return Response.json({ mode: 'ai', messages: [] })
+    }
+
+    // If human is handling — return new human messages since last poll
+    if (session.mode === 'human' || session.mode === 'waiting') {
+      let query = supabase
+        .from('messages')
+        .select('*')
+        .eq('session_id', sessionId)
+        .eq('sender_type', 'human')
+        .order('created_at', { ascending: true })
+
+      if (since) {
+        query = query.gt('created_at', since)
+      }
+
+      const { data: messages } = await query
+
+      return Response.json({
+        mode: session.mode,
+        messages: messages ?? [],
+      })
+    }
+
+    if (session.mode === 'resolved') {
+      return Response.json({ mode: 'resolved', messages: [] })
+    }
+
+    return Response.json({ mode: session.mode, messages: [] })
+
+  } catch (error) {
+    console.error('[Sync] Error:', error)
+    return Response.json({ error: 'Internal error' }, { status: 500 })
+  }
+}
+
+----------------------------------------------------------------
+END FILE
+----------------------------------------------------------------
+
+
+----------------------------------------------------------------
+FILE: app/api/webhooks/chatwoot/route.ts
+PURPOSE: Receives POST webhooks FROM Chatwoot when agents reply.
+         Saves human messages to Supabase so widget picks them up.
+----------------------------------------------------------------
+
+import { NextRequest } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import type { ChatwootWebhookPayload } from '@/types/chatwoot'
+
+export async function POST(req: NextRequest) {
+  try {
+    const payload = await req.json() as ChatwootWebhookPayload
+
+    // Verify webhook secret
+    const signature = req.headers.get('x-chatwoot-signature')
+    const secret = process.env.CHATWOOT_WEBHOOK_SECRET
+    if (secret && signature !== secret) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Only handle agent-sent outgoing messages
+    // Ignore: bot messages, activity logs, system messages
+    if (
+      payload.event !== 'message_created' ||
+      payload.message_type !== 'outgoing' ||
+      payload.sender?.type !== 'agent' ||
+      !payload.content ||
+      !payload.conversation?.id
+    ) {
+      return Response.json({ status: 'ignored' })
+    }
+
+    const supabase = createClient()
+
+    // Find our session by Chatwoot conversation ID
+    const { data: session } = await supabase
+      .from('sessions')
+      .select('id, mode, channel')
+      .eq('chatwoot_conversation_id', payload.conversation.id)
+      .single()
+
+    if (!session) {
+      console.warn('[Chatwoot Webhook] No session for conversation:', payload.conversation.id)
+      return Response.json({ status: 'session_not_found' })
+    }
+
+    // Save human message to our messages table
+    await supabase.from('messages').insert({
+      session_id: session.id,
+      content: payload.content,
+      sender_type: 'human',
+      role: 'assistant',
+      chatwoot_message_id: payload.id,
+    })
+
+    // Update session mode to human (in case it was 'waiting')
+    if (session.mode === 'waiting') {
+      await supabase
+        .from('sessions')
+        .update({
+          mode: 'human',
+          last_human_message_at: new Date().toISOString(),
+        })
+        .eq('id', session.id)
+    }
+
+    // If this is a WhatsApp session — forward human reply to customer via Meta API
+    if (session.channel === 'whatsapp') {
+      // Get contact phone from session
+      const { data: sessionData } = await supabase
+        .from('sessions')
+        .select('*, contacts(*)')
+        .eq('id', session.id)
+        .single()
+
+      const customerPhone = sessionData?.contacts?.phone
+      const bot = await supabase
+        .from('bots')
+        .select('whatsapp_phone_number_id')
+        .eq('id', sessionData?.bot_id)
+        .single()
+
+      if (customerPhone && bot.data?.whatsapp_phone_number_id) {
+        await fetch(
+          `https://graph.facebook.com/v18.0/${bot.data.whatsapp_phone_number_id}/messages`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              messaging_product: 'whatsapp',
+              to: customerPhone,
+              type: 'text',
+              text: { body: payload.content },
+            }),
+          }
+        )
+      }
+    }
+
+    return Response.json({ status: 'saved' })
+
+  } catch (error) {
+    console.error('[Chatwoot Webhook] Error:', error)
+    return Response.json({ error: 'Internal error' }, { status: 500 })
+  }
+}
+
+----------------------------------------------------------------
+END FILE
+----------------------------------------------------------------
+
+
+----------------------------------------------------------------
+FILE: app/api/bots/create-inbox/route.ts
+PURPOSE: Called when a client creates a new bot.
+         Automatically creates a matching Chatwoot inbox for that bot.
+----------------------------------------------------------------
+
+import { NextRequest } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { createInbox } from '@/lib/chatwoot'
+
+export async function POST(req: NextRequest) {
+  try {
+    const { botId, botName } = await req.json()
+
+    const supabase = createClient()
+
+    // Create inbox in Chatwoot
+    const inbox = await createInbox(`${botName}`)
+
+    // Save inbox ID to bot record
+    await supabase
+      .from('bots')
+      .update({ chatwoot_inbox_id: inbox.id })
+      .eq('id', botId)
+
+    return Response.json({ inboxId: inbox.id })
+
+  } catch (error) {
+    console.error('[Create Inbox] Error:', error)
+    return Response.json({ error: 'Internal error' }, { status: 500 })
+  }
+}
+
+----------------------------------------------------------------
+END FILE
+----------------------------------------------------------------
+
+
+================================================================
+SECTION 9: FRONTEND PAGES TO CREATE
+================================================================
+
+----------------------------------------------------------------
+FILE: app/admin/client/[id]/inbox/page.tsx
+PURPOSE: Embeds the full Chatwoot agent dashboard inside the
+         Vittain AI client manager. Agents never leave the product.
+----------------------------------------------------------------
+
+'use client'
+
+export default function InboxPage() {
+  const chatwootUrl = process.env.NEXT_PUBLIC_CHATWOOT_URL
+
+  if (!chatwootUrl) {
+    return (
+      <div className="flex items-center justify-center h-64 text-gray-500">
+        <p>Inbox not configured. Add NEXT_PUBLIC_CHATWOOT_URL to your environment.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="w-full flex flex-col" style={{ height: 'calc(100vh - 64px)' }}>
+      <div className="bg-white border-b px-6 py-3 flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">Support Inbox</h2>
+          <p className="text-sm text-gray-500">
+            Live conversations — human handoffs appear here
+          </p>
+        </div>
+        <a
+          href={chatwootUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sm text-blue-600 hover:underline"
+        >
+          Open in new tab ↗
+        </a>
+      </div>
+      <iframe
+        src={chatwootUrl}
+        className="flex-1 w-full border-0"
+        title="Support Inbox"
+        allow="microphone; camera"
+      />
+    </div>
+  )
+}
+
+----------------------------------------------------------------
+END FILE
+----------------------------------------------------------------
+
+
+----------------------------------------------------------------
+FILE: app/admin/client/[id]/campaigns/page.tsx
+PURPOSE: Embeds the full Dittofeed campaign builder inside the
+         Vittain AI client manager. Clients build and send campaigns here.
+----------------------------------------------------------------
+
+'use client'
+
+export default function CampaignsPage() {
+  const dittofeedUrl = process.env.NEXT_PUBLIC_DITTOFEED_URL
+
+  if (!dittofeedUrl) {
+    return (
+      <div className="flex items-center justify-center h-64 text-gray-500">
+        <p>Campaigns not configured. Add NEXT_PUBLIC_DITTOFEED_URL to your environment.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="w-full flex flex-col" style={{ height: 'calc(100vh - 64px)' }}>
+      <div className="bg-white border-b px-6 py-3 flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">Campaign Builder</h2>
+          <p className="text-sm text-gray-500">
+            Create WhatsApp and Email campaigns, segments, and automated journeys
+          </p>
+        </div>
+        <a
+          href={dittofeedUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sm text-blue-600 hover:underline"
+        >
+          Open in new tab ↗
+        </a>
+      </div>
+      <iframe
+        src={dittofeedUrl}
+        className="flex-1 w-full border-0"
+        title="Campaign Builder"
+      />
+    </div>
+  )
+}
+
+----------------------------------------------------------------
+END FILE
+----------------------------------------------------------------
+
+================================================================
+SECTION 10: WIDGET.JS UPDATES
+================================================================
+
+Find your existing widget.js file and make these changes.
+Do NOT rewrite the entire file — only add the marked sections.
+
+CHANGE 1: Update the init function to call /api/chat/init
+---------
+After the widget loads and the session starts, call:
+
+  fetch('/api/chat/init', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      botId: WIDGET_BOT_ID,           // already available in widget
+      visitorName: null,              // optional, capture from form if you have one
+      visitorEmail: null,
+    })
+  })
+  .then(r => r.json())
+  .then(data => {
+    sessionStorage.setItem('vt_session_id', data.sessionId)
+  })
+
+
+CHANGE 2: Add human message display styling
+---------
+When /api/chat/sync returns messages with sender_type = 'human',
+display them with a different color and label:
+
+  // In your message rendering function, check sender_type:
+  if (msg.sender_type === 'human') {
+    // Show with blue bubble + "Support Agent" label
+    bubble.style.backgroundColor = '#2563EB'  // blue
+    bubble.style.color = '#FFFFFF'
+    label.textContent = 'Support Agent'
+  } else {
+    // Your existing AI message styling
+  }
+
+
+CHANGE 3: Show status messages on mode changes
+---------
+When sync returns mode = 'waiting':
+  showSystemMessage("Connecting you to a support agent...")
+
+When sync returns mode = 'human' (first time):
+  showSystemMessage("A support agent has joined the conversation.")
+
+When sync returns mode = 'resolved':
+  showSystemMessage("This conversation has been resolved. Thank you!")
+  stopPolling()
+
+
+CHANGE 4: Polling behaviour
+---------
+Only start polling after handoff is triggered (mode = 'waiting').
+Stop polling when mode returns 'ai' or 'resolved'.
+Poll interval: 3000ms (3 seconds).
+Pass ?since=LAST_MESSAGE_TIMESTAMP to avoid receiving duplicate messages.
+
+----------------------------------------------------------------
+END OF WIDGET CHANGES
+----------------------------------------------------------------
+
+================================================================
+SECTION 11: EXISTING AI CHAT ROUTE — SMALL UPDATE NEEDED
+================================================================
+
+FILE: app/api/chat/route.ts (ALREADY EXISTS — only add this)
+
+In your existing chat handler, after generating the AI response,
+add this block to check for handoff flag and mirror to Chatwoot:
+
+  // --- ADD THIS AFTER GENERATING AI RESPONSE ---
+
+  import { sendMessage as chatwootSendMessage } from '@/lib/chatwoot'
+  import { trackEvent } from '@/lib/dittofeed'
+
+  // Check if AI flagged a handoff
+  const needsHandoff = aiReply.includes('[HANDOFF]')
+  const cleanReply = aiReply.replace('[HANDOFF]', '').trim()
+
+  // Mirror messages to Chatwoot for agent visibility
+  if (session?.chatwoot_conversation_id) {
+    try {
+      // Mirror customer message
+      await chatwootSendMessage(
+        session.chatwoot_conversation_id,
+        userMessage,
+        'incoming'
+      )
+      // Mirror AI reply
+      await chatwootSendMessage(
+        session.chatwoot_conversation_id,
+        cleanReply,
+        'outgoing'
+      )
+    } catch (err) {
+      console.error('[Chat] Chatwoot mirror failed:', err)
+    }
+  }
+
+  // Trigger handoff if AI flagged it
+  if (needsHandoff) {
+    await fetch(`${process.env.NEXTAUTH_URL}/api/chat/handoff`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: session.id }),
+    })
+  }
+
+  // --- END OF ADDITION ---
+
+================================================================
+SECTION 12: COMPLETE FILE LIST — BUILD IN THIS ORDER
+================================================================
+
+Build files EXACTLY in this order. Do not skip steps.
+Confirm each file is complete before moving to the next.
+
+STEP 1:  supabase/migrations/20240101000000_add_integrations.sql
+         → Run this in Supabase SQL editor first
+
+STEP 2:  types/chatwoot.ts
+STEP 3:  types/dittofeed.ts
+STEP 4:  lib/chatwoot.ts
+STEP 5:  lib/dittofeed.ts
+STEP 6:  app/api/whatsapp/verify/route.ts
+STEP 7:  app/api/whatsapp/incoming/route.ts
+STEP 8:  app/api/chat/init/route.ts
+STEP 9:  app/api/chat/handoff/route.ts
+STEP 10: app/api/chat/sync/route.ts          (UPDATE existing file)
+STEP 11: app/api/webhooks/chatwoot/route.ts
+STEP 12: app/api/bots/create-inbox/route.ts
+STEP 13: app/admin/client/[id]/inbox/page.tsx
+STEP 14: app/admin/client/[id]/campaigns/page.tsx
+STEP 15: widget.js                           (UPDATE existing file)
+STEP 16: app/api/chat/route.ts               (UPDATE existing file)
+
+================================================================
+SECTION 13: FINAL FOLDER STRUCTURE AFTER BUILD
+================================================================
+
+your-vittain-ai/
+├── types/
+│   ├── chatwoot.ts                          ← NEW
+│   └── dittofeed.ts                         ← NEW
+├── lib/
+│   ├── chatwoot.ts                          ← NEW
+│   ├── dittofeed.ts                         ← NEW
+│   └── supabase/                            ← EXISTING
+├── app/
+│   └── api/
+│       ├── chat/
+│       │   ├── route.ts                     ← UPDATED
+│       │   ├── init/route.ts                ← NEW
+│       │   ├── handoff/route.ts             ← NEW
+│       │   └── sync/route.ts                ← UPDATED
+│       ├── whatsapp/
+│       │   ├── verify/route.ts              ← NEW
+│       │   └── incoming/route.ts            ← NEW
+│       ├── bots/
+│       │   └── create-inbox/route.ts        ← NEW
+│       └── webhooks/
+│           └── chatwoot/route.ts            ← NEW
+│       └── admin/
+│           └── client/
+│               └── [id]/
+│                   ├── inbox/page.tsx       ← NEW
+│                   └── campaigns/page.tsx   ← NEW
+├── supabase/
+│   └── migrations/
+│       └── 20240101000000_add_integrations.sql ← NEW
+└── widget.js                                ← UPDATED
+
+================================================================
+SECTION 14: WHAT RUNS WHERE (DEPLOYMENT SUMMARY)
+================================================================
+
+SERVICE               RUNS ON             URL
+─────────────────────────────────────────────────────────────
+Vittain AI Next.js    Vercel (free)        your-domain.vercel.app
+Chatwoot CE           Oracle Cloud VM      YOUR_IP:3000
+Dittofeed Lite        Oracle Cloud VM      YOUR_IP:3001
+Supabase DB           Supabase (free tier) your-project.supabase.co
+
+WEBHOOK URLS TO REGISTER:
+─────────────────────────────────────────────────────────────
+Meta WhatsApp (verify): your-domain.vercel.app/api/whatsapp/verify
+Meta WhatsApp (msgs):   your-domain.vercel.app/api/whatsapp/incoming
+Chatwoot webhook:       your-domain.vercel.app/api/webhooks/chatwoot
+
+================================================================
+SECTION 15: HOW THE COMPLETE PRODUCT WORKS END TO END
+================================================================
+
+FLOW 1: CUSTOMER CHATS ON WEBSITE
+1. Customer opens widget on client's website
+2. Widget calls /api/chat/init → creates Chatwoot conversation
+3. Customer types message → /api/chat/message → RAG + Groq generates reply
+4. Reply mirrored to Chatwoot (agent can see it)
+5. Customer sees AI reply in widget
+
+FLOW 2: HANDOFF TO HUMAN
+1. AI cannot answer → includes [HANDOFF] in response
+2. /api/chat/handoff called → session mode = 'waiting'
+3. Chatwoot alerts all agents → conversation shows in Inbox tab
+4. Widget shows "Connecting you to support agent..."
+5. Agent opens Vittain AI dashboard → clicks Inbox tab → sees Chatwoot embedded
+6. Agent reads full conversation history → types reply
+7. Chatwoot fires webhook → /api/webhooks/chatwoot
+8. Reply saved to Supabase messages table (sender_type = 'human')
+9. Widget polling /api/chat/sync picks up reply → displays to customer
+
+FLOW 3: WHATSAPP CAMPAIGN → CUSTOMER REPLIES → AI HANDLES
+1. Client opens Vittain AI → clicks Campaigns tab → sees Dittofeed embedded
+2. Client builds segment (e.g. "contacts who asked about pricing")
+3. Client creates WhatsApp template → blasts campaign via Dittofeed
+4. Customer receives campaign message on WhatsApp
+5. Customer replies "Tell me more"
+6. Meta fires webhook → /api/whatsapp/incoming
+7. Router checks session mode → no active human session
+8. AI bot handles conversation via /api/chat internally
+9. AI reply sent back to customer via Meta WhatsApp API
+10. If AI cannot answer → handoff → Chatwoot agent replies via WhatsApp
+
+FLOW 4: NEW CONTACT SYNCED TO DITTOFEED FOR CAMPAIGNS
+1. New visitor chats with widget
+2. /api/chat/init creates contact in Supabase
+3. identifyContact() syncs contact to Dittofeed
+4. Contact now appears in Dittofeed segments
+5. Client can target this contact in future campaigns
+
+================================================================
+END OF BUILD PROMPT
+================================================================
+Total new files: 12 new files + 3 updated files
+Total new code: ~600 lines across all files
+Estimated build time for AI agent: 45-90 minutes
+================================================================
+
+
+
+
+
+================================================================
+VITTAIN AI — BUILD PROMPT PART 2
+Adds: Umami (Analytics) + Peppermint (Ticketing) + Agent Orchestration Layer
+================================================================
+This document EXTENDS the original "Vittain AI — Complete Build Prompt"
+(Chatwoot + Dittofeed integration). Give the AI agent BOTH documents.
+Part 1 must be built first. This part assumes Part 1 is already done.
+
+Do not install any packages not listed here.
+All API calls stay server-side only. Never expose secrets to the client.
+Use Next.js 14 App Router patterns exclusively.
+================================================================
+
+================================================================
+SECTION 0: LICENSE CORRECTION — READ THIS FIRST
+================================================================
+
+Umami   → MIT license. Confirmed clean. No restrictions beyond keeping
+          the copyright notice somewhere in your source tree.
+
+Peppermint → NOT MIT. The current Peppermint-Lab/peppermint repo is
+          licensed AGPLv3 (with a small carve-out of proprietary
+          "Commercial License" folders — the opposite pattern from
+          Chatwoot, where most of the repo is copyleft and only a
+          small piece is proprietary).
+
+          What this means practically:
+          - You CAN self-host Peppermint and use it as your ticketing
+            backend for free, including commercially.
+          - AGPLv3 is a strong copyleft license: if you MODIFY
+            Peppermint's own source code and run that modified version
+            as a network service, you are required to make your
+            modified Peppermint source available to users who interact
+            with it over the network.
+          - The safest pattern (and the one this document follows) is
+            to run Peppermint UNMODIFIED as its own standalone service
+            and only integrate with it over its REST API/webhooks —
+            the same "separate service, talk over API" pattern already
+            used for Chatwoot and Dittofeed in Part 1. Under this
+            pattern, your own Next.js codebase is a separate work and
+            is not required to be AGPL-licensed.
+          - Do not copy Peppermint source files into your own repo or
+            fork-and-modify it unless you're prepared to release those
+            changes under AGPLv3. This is a legal nuance, not just a
+            technical one — if this integration is commercially
+            important, a quick confirmation from a lawyer is worth it.
+
+================================================================
+SECTION A: UMAMI — ANALYTICS INTEGRATION
+================================================================
+
+PURPOSE
+Replaces reliance on Google Analytics. Tracks page views, sessions, and
+custom events across every client's deployed widget. Feeds the existing
+"7-Day Traffic Chart" (Section 5.3 of Part 1) with real data instead of
+placeholder numbers, and gives you a global cross-client view for
+/admin/analytics.
+
+ARCHITECTURE DECISION
+Two different embedding patterns for two different audiences:
+- Internal (you, the platform operator): iframe the full Umami admin
+  dashboard into /admin/analytics for a quick global view.
+- Client-facing (white-labeled, inside /admin/client/[id]/analytics):
+  DO NOT iframe Umami directly — that would show Umami's own branding
+  and every other client's data unless you're careful with permissions.
+  Instead, pull stats via Umami's REST API server-side and render them
+  in your own existing chart components. This keeps the client-facing
+  product fully white-labeled.
+
+A.1 — ENV VARS TO ADD
+
+# ── Umami (running on Oracle Cloud VM) ──
+UMAMI_URL=http://YOUR_ORACLE_IP:3002
+UMAMI_API_KEY=get_from_umami_settings_after_first_login
+NEXT_PUBLIC_UMAMI_URL=http://YOUR_ORACLE_IP:3002
+
+A.2 — DATABASE MIGRATION
+
+FILE TO CREATE: supabase/migrations/20240102000000_add_umami.sql
+
+----------------------------------------------------------------
+ALTER TABLE clients
+  ADD COLUMN IF NOT EXISTS umami_website_id TEXT,
+  ADD COLUMN IF NOT EXISTS umami_website_domain TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_clients_umami_website
+  ON clients(umami_website_id);
+----------------------------------------------------------------
+
+A.3 — TYPES
+
+FILE TO CREATE: types/umami.ts
+
+----------------------------------------------------------------
+export interface UmamiWebsite {
+  id: string
+  name: string
+  domain: string
+  createdAt: string
+}
+
+export interface UmamiStats {
+  pageviews: { value: number; prev: number }
+  visitors: { value: number; prev: number }
+  visits: { value: number; prev: number }
+  bounces: { value: number; prev: number }
+  totaltime: { value: number; prev: number }
+}
+
+export interface UmamiPageviewSeries {
+  date: string
+  value: number
+}
+
+export interface CreateWebsiteParams {
+  name: string
+  domain: string
+}
+----------------------------------------------------------------
+
+A.4 — API CLIENT LIBRARY
+
+FILE TO CREATE: lib/umami.ts
+
+----------------------------------------------------------------
+/**
+ * Umami API Client
+ * Self-hosted, MIT licensed. Server-side only.
+ */
+
+import type {
+  UmamiWebsite,
+  UmamiStats,
+  UmamiPageviewSeries,
+  CreateWebsiteParams,
+} from '@/types/umami'
+
+const UMAMI_URL = process.env.UMAMI_URL
+const API_KEY = process.env.UMAMI_API_KEY
+
+if (!UMAMI_URL || !API_KEY) {
+  console.warn('[Umami] Missing env vars — analytics integration disabled')
+}
+
+async function umamiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const res = await fetch(`${UMAMI_URL}/api${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'x-umami-api-key': API_KEY!,
+      ...options.headers,
+    },
+  })
+  if (!res.ok) {
+    const error = await res.text()
+    throw new Error(`Umami API error ${res.status}: ${error}`)
+  }
+  return res.json() as Promise<T>
+}
+
+/** Create a tracked website when a new client is provisioned */
+export async function createWebsite(params: CreateWebsiteParams): Promise<UmamiWebsite> {
+  return umamiFetch<UmamiWebsite>('/websites', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  })
+}
+
+/** Get summary stats for a client's website over a date range */
+export async function getStats(
+  websiteId: string,
+  startAt: number,
+  endAt: number
+): Promise<UmamiStats> {
+  return umamiFetch<UmamiStats>(
+    `/websites/${websiteId}/stats?startAt=${startAt}&endAt=${endAt}`
+  )
+}
+
+/** Get daily pageview series for charting (feeds the 7-Day Traffic Chart) */
+export async function getPageviewSeries(
+  websiteId: string,
+  startAt: number,
+  endAt: number
+): Promise<UmamiPageviewSeries[]> {
+  const res = await umamiFetch<{ pageviews: UmamiPageviewSeries[] }>(
+    `/websites/${websiteId}/pageviews?startAt=${startAt}&endAt=${endAt}&unit=day`
+  )
+  return res.pageviews ?? []
+}
+----------------------------------------------------------------
+
+A.5 — API ROUTES TO CREATE
+
+FILE: app/api/clients/create-website/route.ts
+PURPOSE: Called when a new client is onboarded. Provisions their Umami
+         website entry automatically.
+----------------------------------------------------------------
+import { NextRequest } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { createWebsite } from '@/lib/umami'
+
+export async function POST(req: NextRequest) {
+  try {
+    const { clientId, clientName, domain } = await req.json()
+    const supabase = createClient()
+
+    const website = await createWebsite({ name: clientName, domain })
+
+    await supabase
+      .from('clients')
+      .update({
+        umami_website_id: website.id,
+        umami_website_domain: domain,
+      })
+      .eq('id', clientId)
+
+    return Response.json({ websiteId: website.id })
+  } catch (error) {
+    console.error('[Create Website] Error:', error)
+    return Response.json({ error: 'Internal error' }, { status: 500 })
+  }
+}
+----------------------------------------------------------------
+
+FILE: app/api/analytics/traffic/route.ts
+PURPOSE: Server-side proxy the client-facing analytics tab calls.
+         Keeps Umami fully white-labeled — the browser never talks
+         to Umami directly for this view.
+----------------------------------------------------------------
+import { NextRequest } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { getStats, getPageviewSeries } from '@/lib/umami'
+
+export async function GET(req: NextRequest) {
+  try {
+    const clientId = req.nextUrl.searchParams.get('clientId')
+    if (!clientId) {
+      return Response.json({ error: 'clientId required' }, { status: 400 })
+    }
+
+    const supabase = createClient()
+    const { data: client } = await supabase
+      .from('clients')
+      .select('umami_website_id')
+      .eq('id', clientId)
+      .single()
+
+    if (!client?.umami_website_id) {
+      return Response.json({ stats: null, series: [] })
+    }
+
+    const endAt = Date.now()
+    const startAt = endAt - 7 * 24 * 60 * 60 * 1000 // last 7 days
+
+    const [stats, series] = await Promise.all([
+      getStats(client.umami_website_id, startAt, endAt),
+      getPageviewSeries(client.umami_website_id, startAt, endAt),
+    ])
+
+    return Response.json({ stats, series })
+  } catch (error) {
+    console.error('[Analytics Traffic] Error:', error)
+    return Response.json({ error: 'Internal error' }, { status: 500 })
+  }
+}
+----------------------------------------------------------------
+
+A.6 — FRONTEND UPDATES
+
+FILE TO UPDATE: app/admin/client/[id]/analytics/page.tsx (Tab 3, existing)
+- Replace the placeholder 7-Day Traffic Chart data source with a call
+  to /api/analytics/traffic?clientId=... and render using your existing
+  chart component. No visual redesign needed — same chart, real data.
+
+FILE TO UPDATE: app/admin/analytics/page.tsx (global admin view)
+- Add a simple iframe embed here ONLY (internal tool, not client-facing):
+
+  <iframe
+    src={`${process.env.NEXT_PUBLIC_UMAMI_URL}`}
+    className="w-full h-[80vh] border-0"
+    title="Umami Global Analytics"
+  />
+
+A.7 — WIDGET.JS UPDATE
+Add the Umami tracking script tag to the pages where widget.js is
+injected (or inject it dynamically from widget.js on load), pointed at
+each client's own umami_website_id:
+
+  <script
+    async
+    src="{UMAMI_URL}/script.js"
+    data-website-id="{client's umami_website_id}"
+  ></script>
+
+Fetch the website ID from your existing bot-config endpoint that
+widget.js already calls on load — add `umamiWebsiteId` to that
+response payload and inject the script tag dynamically.
+
+================================================================
+SECTION B: PEPPERMINT — TICKETING INTEGRATION
+================================================================
+
+PURPOSE
+Implements Phase 1 of the roadmap in Part 1's spec: every unresolved
+chat past handoff becomes a formal ticket — assignees, SLAs, internal
+notes, tracked to resolution.
+
+ARCHITECTURE DECISION
+Run Peppermint unmodified as its own service (see Section 0 above).
+Integrate purely via its REST API + webhooks, mirroring the same
+pattern used for Chatwoot in Part 1. Do not fork or edit Peppermint's
+source.
+
+B.1 — ENV VARS TO ADD
+
+# ── Peppermint (running on Oracle Cloud VM) ──
+PEPPERMINT_URL=http://YOUR_ORACLE_IP:3003
+PEPPERMINT_API_KEY=get_from_peppermint_settings_page
+PEPPERMINT_WEBHOOK_SECRET=generate_random_32_char_string
+NEXT_PUBLIC_PEPPERMINT_URL=http://YOUR_ORACLE_IP:3003
+
+B.2 — DATABASE MIGRATION
+
+FILE TO CREATE: supabase/migrations/20240103000000_add_peppermint.sql
+
+----------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS tickets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+  session_id UUID REFERENCES sessions(id) ON DELETE SET NULL,
+  peppermint_ticket_id INTEGER,
+  status TEXT DEFAULT 'open'
+    CHECK (status IN ('open', 'in_progress', 'resolved', 'closed')),
+  priority TEXT DEFAULT 'normal'
+    CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
+  assignee TEXT,
+  subject TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  resolved_at TIMESTAMP WITH TIME ZONE
+);
+
+CREATE INDEX IF NOT EXISTS idx_tickets_client ON tickets(client_id);
+CREATE INDEX IF NOT EXISTS idx_tickets_session ON tickets(session_id);
+CREATE INDEX IF NOT EXISTS idx_tickets_peppermint ON tickets(peppermint_ticket_id);
+
+ALTER TABLE tickets ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "clients_own_tickets" ON tickets
+  FOR ALL USING (
+    client_id IN (SELECT id FROM clients WHERE id = client_id)
+  );
+----------------------------------------------------------------
+
+B.3 — TYPES
+
+FILE TO CREATE: types/peppermint.ts
+
+----------------------------------------------------------------
+export interface PeppermintTicket {
+  id: number
+  title: string
+  status: string
+  priority: string
+  assignedTo?: string
+  createdAt: string
+}
+
+export interface CreateTicketParams {
+  title: string
+  detail: string
+  priority?: 'low' | 'normal' | 'high' | 'urgent'
+  email?: string
+  clientReference?: string
+}
+
+export interface PeppermintWebhookPayload {
+  event: string
+  ticket?: PeppermintTicket
+}
+----------------------------------------------------------------
+
+B.4 — API CLIENT LIBRARY
+
+FILE TO CREATE: lib/peppermint.ts
+
+----------------------------------------------------------------
+/**
+ * Peppermint API Client
+ * Self-hosted, AGPLv3 — used unmodified as a standalone service.
+ * Server-side only.
+ */
+
+import type { PeppermintTicket, CreateTicketParams } from '@/types/peppermint'
+
+const PEPPERMINT_URL = process.env.PEPPERMINT_URL
+const API_KEY = process.env.PEPPERMINT_API_KEY
+
+if (!PEPPERMINT_URL || !API_KEY) {
+  console.warn('[Peppermint] Missing env vars — ticketing integration disabled')
+}
+
+async function peppermintFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const res = await fetch(`${PEPPERMINT_URL}/api/v1${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${API_KEY}`,
+      ...options.headers,
+    },
+  })
+  if (!res.ok) {
+    const error = await res.text()
+    throw new Error(`Peppermint API error ${res.status}: ${error}`)
+  }
+  return res.json() as Promise<T>
+}
+
+/** Create a ticket — called after handoff when a conversation goes unresolved */
+export async function createTicket(params: CreateTicketParams): Promise<PeppermintTicket> {
+  return peppermintFetch<PeppermintTicket>('/tickets', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  })
+}
+
+/** Update ticket status (e.g. when resolved via chat) */
+export async function updateTicketStatus(
+  ticketId: number,
+  status: string
+): Promise<PeppermintTicket> {
+  return peppermintFetch<PeppermintTicket>(`/tickets/${ticketId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  })
+}
+
+/** Add an internal note/comment to a ticket */
+export async function addComment(ticketId: number, comment: string): Promise<void> {
+  await peppermintFetch(`/tickets/${ticketId}/comments`, {
+    method: 'POST',
+    body: JSON.stringify({ text: comment }),
+  })
+}
+----------------------------------------------------------------
+
+B.5 — API ROUTES TO CREATE
+
+FILE: app/api/tickets/create/route.ts
+PURPOSE: Called from the handoff flow when a conversation needs formal
+         tracking (e.g. still unresolved N minutes after handoff, or
+         immediately — your choice of trigger condition).
+----------------------------------------------------------------
+import { NextRequest } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { createTicket } from '@/lib/peppermint'
+
+export async function POST(req: NextRequest) {
+  try {
+    const { sessionId, subject, detail, priority } = await req.json()
+    const supabase = createClient()
+
+    const { data: session } = await supabase
+      .from('sessions')
+      .select('*, bots(client_id)')
+      .eq('id', sessionId)
+      .single()
+
+    if (!session) {
+      return Response.json({ error: 'Session not found' }, { status: 404 })
+    }
+
+    const ticket = await createTicket({
+      title: subject ?? 'Support request from Vittain AI',
+      detail: detail ?? 'Escalated from AI chat handoff',
+      priority: priority ?? 'normal',
+      clientReference: sessionId,
+    })
+
+    const { data: savedTicket } = await supabase
+      .from('tickets')
+      .insert({
+        client_id: session.bots.client_id,
+        session_id: sessionId,
+        peppermint_ticket_id: ticket.id,
+        subject: ticket.title,
+        priority: priority ?? 'normal',
+      })
+      .select()
+      .single()
+
+    return Response.json({ ticket: savedTicket })
+  } catch (error) {
+    console.error('[Create Ticket] Error:', error)
+    return Response.json({ error: 'Internal error' }, { status: 500 })
+  }
+}
+----------------------------------------------------------------
+
+FILE: app/api/webhooks/peppermint/route.ts
+PURPOSE: Receives ticket status changes from Peppermint (resolved,
+         reassigned) and syncs them back to Supabase.
+----------------------------------------------------------------
+import { NextRequest } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import type { PeppermintWebhookPayload } from '@/types/peppermint'
+
+export async function POST(req: NextRequest) {
+  try {
+    const payload = await req.json() as PeppermintWebhookPayload
+
+    const signature = req.headers.get('x-peppermint-signature')
+    const secret = process.env.PEPPERMINT_WEBHOOK_SECRET
+    if (secret && signature !== secret) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    if (!payload.ticket) {
+      return Response.json({ status: 'ignored' })
+    }
+
+    const supabase = createClient()
+
+    const update: Record<string, unknown> = {
+      status: payload.ticket.status,
+      assignee: payload.ticket.assignedTo ?? null,
+    }
+    if (payload.ticket.status === 'resolved' || payload.ticket.status === 'closed') {
+      update.resolved_at = new Date().toISOString()
+    }
+
+    await supabase
+      .from('tickets')
+      .update(update)
+      .eq('peppermint_ticket_id', payload.ticket.id)
+
+    return Response.json({ status: 'synced' })
+  } catch (error) {
+    console.error('[Peppermint Webhook] Error:', error)
+    return Response.json({ error: 'Internal error' }, { status: 500 })
+  }
+}
+----------------------------------------------------------------
+
+B.6 — FRONTEND PAGE TO CREATE
+
+FILE: app/admin/client/[id]/tickets/page.tsx
+PURPOSE: Embeds Peppermint inside the client manager, same iframe
+         pattern used for Chatwoot's inbox tab in Part 1.
+----------------------------------------------------------------
+'use client'
+
+export default function TicketsPage() {
+  const peppermintUrl = process.env.NEXT_PUBLIC_PEPPERMINT_URL
+
+  if (!peppermintUrl) {
+    return (
+      <div className="flex items-center justify-center h-64 text-gray-500">
+        <p>Ticketing not configured. Add NEXT_PUBLIC_PEPPERMINT_URL to your environment.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="w-full flex flex-col" style={{ height: 'calc(100vh - 64px)' }}>
+      <div className="bg-white border-b px-6 py-3 flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">Tickets</h2>
+          <p className="text-sm text-gray-500">
+            Formal support tickets escalated from chat handoffs
+          </p>
+        </div>
+        <a href={peppermintUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline">
+          Open in new tab ↗
+        </a>
+      </div>
+      <iframe src={peppermintUrl} className="flex-1 w-full border-0" title="Tickets" />
+    </div>
+  )
+}
+----------------------------------------------------------------
+
+B.7 — HANDOFF FLOW UPDATE
+
+FILE TO UPDATE: app/api/chat/handoff/route.ts (from Part 1 — extend it)
+Add a call to /api/tickets/create right after the Chatwoot handoff
+trigger, so every handoff automatically opens a tracked ticket:
+
+  // --- ADD AFTER THE CHATWOOT triggerHandoff() CALL ---
+  await fetch(`${process.env.NEXTAUTH_URL}/api/tickets/create`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sessionId,
+      subject: `Handoff requested — session ${sessionId}`,
+      priority: 'normal',
+    }),
+  })
+  // --- END ADDITION ---
+
+================================================================
+SECTION C: AGENT ORCHESTRATION TOOL LAYER (FUTURE-PROOFING)
+================================================================
+
+PURPOSE
+You are not building an autonomous agent yet. You ARE building the
+function layer that a future orchestrating agent (your "Master Agent"
+roadmap item) will call. Every action across Chatwoot, Dittofeed,
+Umami, and Peppermint gets wrapped as a named, schema'd function now,
+so wiring in an LLM orchestrator later is a connection problem, not a
+rewrite.
+
+C.1 — DATABASE MIGRATION
+
+FILE TO CREATE: supabase/migrations/20240104000000_add_agent_layer.sql
+
+----------------------------------------------------------------
+-- Extend audit_logs so a future agent shows up as a distinct actor type
+ALTER TABLE audit_logs
+  ADD COLUMN IF NOT EXISTS actor_type TEXT DEFAULT 'human'
+    CHECK (actor_type IN ('human', 'agent', 'system'));
+
+-- Tracks any action a future agent proposes, before/after approval.
+-- This table exists NOW even though nothing writes to it yet except
+-- your own dashboard actions — it's the audit trail an agent will
+-- use later, and building it early means it's already proven.
+CREATE TABLE IF NOT EXISTS agent_actions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+  action_type TEXT NOT NULL,        -- e.g. 'launch_campaign', 'send_whatsapp_blast'
+  payload JSONB NOT NULL,           -- the function arguments
+  status TEXT DEFAULT 'proposed'
+    CHECK (status IN ('proposed', 'approved', 'rejected', 'executed', 'failed')),
+  requested_by TEXT DEFAULT 'agent',
+  approved_by UUID,                 -- references an admin user, nullable
+  result JSONB,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  decided_at TIMESTAMP WITH TIME ZONE,
+  executed_at TIMESTAMP WITH TIME ZONE
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_actions_client ON agent_actions(client_id);
+CREATE INDEX IF NOT EXISTS idx_agent_actions_status ON agent_actions(status);
+
+ALTER TABLE agent_actions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "clients_own_agent_actions" ON agent_actions
+  FOR ALL USING (
+    client_id IN (SELECT id FROM clients WHERE id = client_id)
+  );
+----------------------------------------------------------------
+
+C.2 — TOOL FUNCTION LAYER
+
+Build every function in its own file under lib/agent-tools/. Each
+function takes typed, tenant-scoped arguments and returns a typed
+result — this shape is what lets you wrap them as LLM tool-call
+schemas (or an MCP server) later with minimal glue code.
+
+FILE TO CREATE: lib/agent-tools/types.ts
+----------------------------------------------------------------
+export interface ToolContext {
+  clientId: string
+  // Later: add callerType: 'human' | 'agent', callerId, etc.
+}
+
+export interface ToolResult<T> {
+  ok: boolean
+  data?: T
+  error?: string
+}
+----------------------------------------------------------------
+
+FILE TO CREATE: lib/agent-tools/read-only.ts
+PURPOSE: Safe functions an agent can call freely — no side effects.
+----------------------------------------------------------------
+import { createClient } from '@/lib/supabase/server'
+import { getStats, getPageviewSeries } from '@/lib/umami'
+import type { ToolContext, ToolResult } from './types'
+
+/** get_segment — list/count contacts matching filter criteria */
+export async function getSegment(
+  ctx: ToolContext,
+  criteria: { topic?: string; sinceDays?: number; channel?: string }
+): Promise<ToolResult<{ count: number; contactIds: string[] }>> {
+  const supabase = createClient()
+  let query = supabase.from('contacts').select('id').eq('client_id', ctx.clientId)
+  if (criteria.channel) query = query.eq('channel', criteria.channel)
+  if (criteria.sinceDays) {
+    const since = new Date(Date.now() - criteria.sinceDays * 86400000).toISOString()
+    query = query.gte('created_at', since)
+  }
+  const { data, error } = await query
+  if (error) return { ok: false, error: error.message }
+  return { ok: true, data: { count: data.length, contactIds: data.map(d => d.id) } }
+}
+
+/** get_analytics_summary — pull traffic stats for a client */
+export async function getAnalyticsSummary(
+  ctx: ToolContext,
+  rangeDays = 7
+): Promise<ToolResult<{ pageviews: number; visitors: number }>> {
+  const supabase = createClient()
+  const { data: client } = await supabase
+    .from('clients')
+    .select('umami_website_id')
+    .eq('id', ctx.clientId)
+    .single()
+  if (!client?.umami_website_id) {
+    return { ok: false, error: 'No analytics website configured for this client' }
+  }
+  const endAt = Date.now()
+  const startAt = endAt - rangeDays * 86400000
+  const stats = await getStats(client.umami_website_id, startAt, endAt)
+  return { ok: true, data: { pageviews: stats.pageviews.value, visitors: stats.visitors.value } }
+}
+
+/** get_open_tickets — list open tickets for a client */
+export async function getOpenTickets(
+  ctx: ToolContext
+): Promise<ToolResult<{ count: number }>> {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('tickets')
+    .select('id')
+    .eq('client_id', ctx.clientId)
+    .in('status', ['open', 'in_progress'])
+  if (error) return { ok: false, error: error.message }
+  return { ok: true, data: { count: data.length } }
+}
+----------------------------------------------------------------
+
+FILE TO CREATE: lib/agent-tools/side-effecting.ts
+PURPOSE: Functions with real-world effects. These do NOT execute
+         directly — they write a row to agent_actions with status
+         'proposed' and return that row. A human approves it (or, for
+         now, your own dashboard calls execute() directly after a user
+         clicks "Send" — same code path either way).
+----------------------------------------------------------------
+import { createClient } from '@/lib/supabase/server'
+import { identifyContact, trackEvent } from '@/lib/dittofeed'
+import type { ToolContext, ToolResult } from './types'
+
+/** propose_campaign — stage a campaign launch for approval */
+export async function proposeCampaign(
+  ctx: ToolContext,
+  payload: { segmentCriteria: Record<string, unknown>; channel: string; copy: string }
+): Promise<ToolResult<{ actionId: string }>> {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('agent_actions')
+    .insert({
+      client_id: ctx.clientId,
+      action_type: 'launch_campaign',
+      payload,
+      status: 'proposed',
+    })
+    .select()
+    .single()
+  if (error) return { ok: false, error: error.message }
+  return { ok: true, data: { actionId: data.id } }
+}
+
+/** execute_approved_action — runs a previously approved action */
+export async function executeApprovedAction(
+  ctx: ToolContext,
+  actionId: string
+): Promise<ToolResult<{ status: string }>> {
+  const supabase = createClient()
+  const { data: action } = await supabase
+    .from('agent_actions')
+    .select('*')
+    .eq('id', actionId)
+    .eq('client_id', ctx.clientId)
+    .single()
+
+  if (!action || action.status !== 'approved') {
+    return { ok: false, error: 'Action not found or not approved' }
+  }
+
+  try {
+    if (action.action_type === 'launch_campaign') {
+      // Delegate to your existing Dittofeed campaign trigger logic here.
+      // Placeholder — wire to your actual Dittofeed broadcast call.
+    }
+    await supabase
+      .from('agent_actions')
+      .update({ status: 'executed', executed_at: new Date().toISOString() })
+      .eq('id', actionId)
+    return { ok: true, data: { status: 'executed' } }
+  } catch (err) {
+    await supabase
+      .from('agent_actions')
+      .update({ status: 'failed', result: { error: String(err) } })
+      .eq('id', actionId)
+    return { ok: false, error: String(err) }
+  }
+}
+----------------------------------------------------------------
+
+C.3 — APPROVAL API ROUTE
+
+FILE TO CREATE: app/api/agent-actions/[id]/decide/route.ts
+PURPOSE: A human approves or rejects a proposed action. This is the
+         gate mentioned in the roadmap ("Reply 'Approve' to send").
+         For now, your dashboard's own "Send Campaign" button can call
+         this with decision: 'approved' immediately after propose —
+         later, an agent's proposal sits here until a human clicks it.
+----------------------------------------------------------------
+import { NextRequest } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const { decision } = await req.json() // 'approved' | 'rejected'
+    const supabase = createClient()
+
+    await supabase
+      .from('agent_actions')
+      .update({ status: decision, decided_at: new Date().toISOString() })
+      .eq('id', params.id)
+
+    // Log to the existing audit_logs table with actor_type = 'human'
+    await supabase.from('audit_logs').insert({
+      actor_type: 'human',
+      action: `agent_action_${decision}`,
+      target: params.id,
+    })
+
+    return Response.json({ status: decision })
+  } catch (error) {
+    console.error('[Agent Action Decide] Error:', error)
+    return Response.json({ error: 'Internal error' }, { status: 500 })
+  }
+}
+----------------------------------------------------------------
+
+C.4 — WHY THIS IS ENOUGH FOR NOW
+You are NOT building an LLM loop yet. You're building:
+1. Tenant-scoped, typed functions (lib/agent-tools/) — reusable by
+   your dashboard UI today and an agent tomorrow.
+2. A proposal/approval table (agent_actions) — so side-effecting
+   actions always pass through a gate, whether a human or an agent
+   is the one proposing them.
+3. An audit trail with an actor_type column — already tells you who
+   did what, ready to distinguish humans from agents later.
+
+When you're ready to add the Master Agent, the work left is: wire an
+LLM's tool-use loop (or an MCP server) to call the functions in
+lib/agent-tools/ — no changes needed to Chatwoot, Dittofeed, Umami, or
+Peppermint integrations, since the agent only ever touches your own
+function layer, never those services directly.
+
+================================================================
+SECTION D: UPDATED COMPLETE FILE LIST — BUILD ORDER
+================================================================
+Build Part 1's 16 steps first (see original document), then continue:
+
+STEP 17: supabase/migrations/20240102000000_add_umami.sql
+STEP 18: types/umami.ts
+STEP 19: lib/umami.ts
+STEP 20: app/api/clients/create-website/route.ts
+STEP 21: app/api/analytics/traffic/route.ts
+STEP 22: app/admin/client/[id]/analytics/page.tsx     (UPDATE existing)
+STEP 23: app/admin/analytics/page.tsx                 (UPDATE existing)
+STEP 24: widget.js                                    (UPDATE — Umami script tag)
+
+STEP 25: supabase/migrations/20240103000000_add_peppermint.sql
+STEP 26: types/peppermint.ts
+STEP 27: lib/peppermint.ts
+STEP 28: app/api/tickets/create/route.ts
+STEP 29: app/api/webhooks/peppermint/route.ts
+STEP 30: app/admin/client/[id]/tickets/page.tsx
+STEP 31: app/api/chat/handoff/route.ts                (UPDATE — ticket creation)
+
+STEP 32: supabase/migrations/20240104000000_add_agent_layer.sql
+STEP 33: lib/agent-tools/types.ts
+STEP 34: lib/agent-tools/read-only.ts
+STEP 35: lib/agent-tools/side-effecting.ts
+STEP 36: app/api/agent-actions/[id]/decide/route.ts
+
+================================================================
+SECTION E: UPDATED FOLDER STRUCTURE (ADDITIONS ONLY)
+================================================================
+your-vittain-ai/
+├── types/
+│   ├── umami.ts                              ← NEW
+│   └── peppermint.ts                         ← NEW
+├── lib/
+│   ├── umami.ts                              ← NEW
+│   ├── peppermint.ts                         ← NEW
+│   └── agent-tools/
+│       ├── types.ts                          ← NEW
+│       ├── read-only.ts                      ← NEW
+│       └── side-effecting.ts                 ← NEW
+├── app/
+│   └── api/
+│       ├── clients/
+│       │   └── create-website/route.ts       ← NEW
+│       ├── analytics/
+│       │   └── traffic/route.ts              ← NEW
+│       ├── tickets/
+│       │   └── create/route.ts               ← NEW
+│       ├── webhooks/
+│       │   └── peppermint/route.ts           ← NEW
+│       └── agent-actions/
+│           └── [id]/decide/route.ts          ← NEW
+│       └── admin/
+│           └── client/
+│               └── [id]/
+│                   └── tickets/page.tsx       ← NEW
+└── supabase/
+    └── migrations/
+        ├── 20240102000000_add_umami.sql      ← NEW
+        ├── 20240103000000_add_peppermint.sql ← NEW
+        └── 20240104000000_add_agent_layer.sql← NEW
+
+================================================================
+SECTION F: UPDATED DEPLOYMENT SUMMARY
+================================================================
+SERVICE               RUNS ON             URL
+─────────────────────────────────────────────────────────────
+Vittain AI Next.js    Vercel (free)        your-domain.vercel.app
+Chatwoot CE           Oracle Cloud VM      YOUR_IP:3000
+Dittofeed Lite        Oracle Cloud VM      YOUR_IP:3001
+Umami                 Oracle Cloud VM      YOUR_IP:3002
+Peppermint            Oracle Cloud VM      YOUR_IP:3003
+Supabase DB           Supabase (free tier) your-project.supabase.co
+
+WEBHOOK URLS TO REGISTER (in addition to Part 1's):
+─────────────────────────────────────────────────────────────
+Peppermint webhook:   your-domain.vercel.app/api/webhooks/peppermint
+
+================================================================
+SECTION G: NEW END-TO-END FLOWS
+================================================================
+
+FLOW 5: ANALYTICS
+1. New client onboarded → /api/clients/create-website provisions a
+   Umami website entry, saves umami_website_id on the client row.
+2. widget.js injects the Umami tracking script using that website ID.
+3. Client opens their Analytics tab → page calls /api/analytics/traffic
+   → server pulls real stats from Umami → renders in your own chart,
+   fully white-labeled.
+4. You (platform operator) open /admin/analytics → see the full Umami
+   dashboard embedded directly, cross-client.
+
+FLOW 6: TICKETING
+1. AI handoff triggers (same as Flow 2 in Part 1).
+2. /api/chat/handoff now also calls /api/tickets/create → opens a
+   Peppermint ticket, saves it to the tickets table linked to the
+   session.
+3. Agent works the ticket in Peppermint (or the embedded Tickets tab).
+4. Peppermint fires a webhook on status change → /api/webhooks/peppermint
+   → tickets table updated → visible in your dashboard without leaving
+   the product.
+
+FLOW 7 (FUTURE): AGENT-DRIVEN CAMPAIGN
+1. Business owner types a request into a future chat-based orchestrator.
+2. Orchestrator calls getSegment() and getAnalyticsSummary() (read-only,
+   no approval needed) to understand the audience and context.
+3. Orchestrator calls proposeCampaign() → row created in agent_actions
+   with status 'proposed'.
+4. Owner sees the proposal in their dashboard, clicks Approve.
+5. /api/agent-actions/[id]/decide flips status to 'approved', logs to
+   audit_logs with actor_type = 'human'.
+6. executeApprovedAction() runs, delegates to the existing Dittofeed
+   integration from Part 1, flips status to 'executed'.
+
+This flow doesn't exist yet — but every piece it depends on
+(tenant-scoped functions, an approval gate, and an audit trail) is
+now built and already in production use by your own dashboard.
+
+================================================================
+END OF PART 2
+================================================================
+New files: 15 new files + 3 updated files
+New tables: clients (extended), tickets, agent_actions, audit_logs (extended)
+Estimated build time for AI agent: 60-90 minutes
+================================================================
+
+this is the entire doc where we are intregrating 4 opensource things into our product so plan a system so that we can work lets do all the intregration , so lets do the code wise intregration first like frontend scripts other logic backend code its data base code etc , so first plan this and lets do the code wise intregration , then the deployemnt part like in oracel vm we do it later after that we can ad the api keys at last before that lets build everything

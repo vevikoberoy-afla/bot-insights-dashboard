@@ -1,0 +1,85 @@
+0. THE THREE PRODUCT PILLARS (what you're actually selling)
+Pillar	Channels	Core UI Difference	New Capability Needed
+Web + WhatsApp Bot	Website widget, WhatsApp	Standard chat bubble	None — this is what you have
+Customer Service Bot	Website widget (different skin), Email	Ticket-first UI, "Raise a ticket" button	Ticketing system
+Sales & Marketing	Website, WhatsApp, Email, SMS (bulk)	Campaign builder + CRM funnel	CRM + bulk messaging + campaign engine
+Key architectural decision: these are NOT three separate products. They are three "bot purpose" templates sitting on the exact same RAG engine, database, and caching layers you already built. A single bot_purpose field controls default UI skin, system prompt tone, and which extra modules (Tickets vs Campaigns) are visible for that bot. This is the single biggest efficiency win — you build the engine once, you don't fork the codebase three times.
+1. UPDATED CORE TECH STACK
+Everything from your current stack, PLUS:
+Layer	Tool	Cost	Purpose
+WhatsApp	Meta Cloud API (direct)	Free API, pay-per-conversation	Chat + bulk sends
+Email send	Resend	Free 3,000/mo	Transactional + campaign emails
+Email receive	Postmark Inbound	Free tier	Parses incoming support emails
+SMS	Twilio	Pay-per-SMS, no monthly fee	Bulk SMS campaigns
+Job Queue / Scheduling	Upstash QStash	Free 500 msgs/day	Throttled bulk sends, scheduled campaigns, retry logic
+Billing	Stripe	Free, txn fee only	Subscriptions + usage-based billing
+Status Page	Upptime (GitHub Actions)	100% free	Public uptime page — industry standard trust signal
+Why QStash matters here: bulk WhatsApp/SMS/Email sends to 200+ contacts cannot fire all at once — you'll hit Meta's rate limits and get the number flagged as spam. QStash lets you queue messages with built-in delay/throttle/retry, all free, and it's from the same Upstash account you already use for Redis — zero new vendor relationship.
+2. UPDATED ENTITY MODEL
+clients
+  └── bots (add: bot_purpose enum: 'webchat' | 'customer_service' | 'sales_marketing')
+        ├── bot_channels (whatsapp/email/sms/web — unchanged from before)
+        ├── bot_datasets (many-to-many link to datasets — unchanged)
+        ├── sessions / messages (unchanged)
+        │
+        ├── [IF bot_purpose = customer_service]
+        │     └── tickets
+        │           └── ticket_messages
+        │           └── ticket_activity_log
+        │
+        └── [IF bot_purpose = sales_marketing]
+              ├── contacts (CRM)
+              │     └── contact_activity (timeline)
+              │     └── deals (funnel stage tracking)
+              ├── segments (saved contact filters)
+              └── campaigns
+                    └── campaign_recipients
+                    └── campaign_events (sent/delivered/opened/clicked/replied)
+
+datasets (client-level, shared across bots — unchanged from earlier design)
+  └── chunks
+  └── qa_pairs
+Important: contacts and tickets belong to the CLIENT, not to one bot — a contact who messages both the Sales bot and the Support bot should be the SAME contact record with a unified timeline. Only campaigns and deals are scoped to the sales_marketing bot(s) specifically, since that's where funnel tracking lives.
+3. NEW WORKFLOW A — TICKETING (Customer Service Bot)
+Customer chats with the Customer Service bot (web widget skin B, or email)
+Bot attempts RAG answer first, same pipeline as always
+Ticket creation triggers on ANY of:
+Customer clicks "Raise a Ticket" button (explicit, web widget only)
+Bot hits fallback response 2x in one session
+Email channel: EVERY inbound email becomes a ticket by default (email is inherently ticket-shaped — no one expects instant reply)
+Ticket created → tickets table, status = open, priority auto-assigned by simple keyword heuristic (refund/broken/urgent = high)
+Bot replies: "I've created ticket #1234, our team will follow up within [SLA time]." — always give the customer a reference number
+Agent works ticket from the Tickets Kanban (already designed earlier)
+Ticket resolution → optional CSAT prompt sent to customer
+4. NEW WORKFLOW B — CRM + BULK CAMPAIGNS (Sales & Marketing Bot)
+4a. Contact capture (automatic)
+Every person who messages ANY bot under a client becomes a contact automatically — name/phone/email extracted from the channel metadata (WhatsApp number, email address, or a captured form field on web). No manual data entry required for basic capture.
+4b. Funnel / Deal tracking
+deals table: id, contact_id, bot_id, stage, value_estimate, created_at
+stages: Lead → Contacted → Interested → Negotiating → Won / Lost
+Stage auto-advances based on bot conversation signals (built on top of the "Sales Follow-Up Logic" from your bot upgrade doc — remember sales_declined / sales_interested tags feed directly into this):
+New contact messages about a product → Lead
+Bot answers product question → Contacted
+Customer asks price/availability → Interested
+Customer says "yes I want to order" → Negotiating
+Order placed (via data source lookup confirming purchase) → Won
+Customer says no / goes cold after 14 days idle → Lost
+Agents can also manually drag deals between stages in a Kanban view (same UI pattern as Tickets — reuse the component).
+4c. Bulk campaign send (this is the part requiring care)
+Client builds a Segment ("all Leads from last 30 days") or uploads CSV
+Client composes message in the Campaign wizard (already designed earlier — channel select → audience → compose → schedule → review)
+WhatsApp bulk sends REQUIRE Meta-approved templates — the campaign wizard must check: is this a template message? If customer hasn't messaged in the last 24 hours, ONLY approved templates can be sent, free-form text will be rejected by Meta
+On send: job pushed to QStash queue, throttled (e.g. 20 messages/sec max, configurable), each send retried automatically on failure
+Delivery webhooks (Meta/Resend/Twilio all provide these) update campaign_events — sent/delivered/read/clicked/bounced
+Customer reply after a campaign → normal bot conversation resumes, tagged with source_campaign_id so you can measure true conversion (not just open rate — actual "did this lead to a sale")
+4d. Consent & compliance (NON-NEGOTIABLE — legal requirement)
+contacts table needs an opt_in_status field per channel (whatsapp_opt_in, email_opt_in, sms_opt_in — each boolean + timestamp)
+NEVER allow a campaign send to a contact without recorded opt-in for that channel — this is required for CAN-SPAM (email), TCPA (SMS), and Meta's own WhatsApp policy (unsolicited marketing gets numbers banned)
+Every marketing email/SMS needs an unsubscribe link/reply keyword — build this once as a shared "STOP"/unsubscribe handler across all channels, updates opt_in_status automatically
+5. EFFICIENCY IMPROVEMENTS TO YOUR EXISTING DESIGN
+Replace polling with it, but smarter: your current /api/chat/sync polls every 5 seconds regardless of activity. Add exponential backoff — poll every 3s for the first minute of an active handoff, then back off to 15s if no new messages, resets to 3s on any new message. Saves a meaningful chunk of Vercel function invocations at scale, still feels real-time to the user.
+Move the [HANDOFF] trigger detection earlier — right now it seems to happen after generation. Detect handoff INTENT at the same Stage 1 intent classification step (from your bot upgrade doc) so you can skip the LLM generation call entirely when a human is explicitly requested — saves a Groq call every time.
+Contacts table becomes your identity layer — instead of sessions being the source of truth per channel, make contact_id the join key across sessions/messages/tickets/deals. This is what makes "same customer messaged on WhatsApp then Email" actually work as ONE unified record instead of two disconnected conversations.
+Campaign sends should NEVER touch the live chat path — route bulk sends through QStash + a dedicated /api/campaigns/dispatch worker endpoint, completely separate from /api/chat. This protects your real-time chat latency from being affected by a 200-message bulk send job running in the background.
+
+i dont want that my client whatsapp number gets blocked / anythign that is not inside the reules and regulaino of meta ,so keep that in mind 

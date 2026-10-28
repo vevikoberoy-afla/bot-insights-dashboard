@@ -1,0 +1,7 @@
+import {NextRequest,NextResponse} from 'next/server'
+import {redis} from '@/lib/redis'
+import {supabase} from '@/lib/supabase'
+import {secretDigest,verifyPaymentToken} from '@/lib/paymentSecurity'
+
+export const dynamic='force-dynamic'
+export async function GET(req:NextRequest){try{const raw=req.nextUrl.searchParams.get('token')||'',token=verifyPaymentToken(raw),ip=(req.headers.get('x-forwarded-for')||'unknown').split(',')[0].trim(),key=`payment_status:${token.transactionId}:${ip}`,count=await redis.incr(key);if(count===1)await redis.expire(key,60);if(count>40)return NextResponse.json({error:'Too many status checks'},{status:429});const result=await supabase.from('commerce_payment_transactions').select('status,verified_at,public_token_hash,commerce_orders(reference,status,payment_status)').eq('id',token.transactionId).eq('client_id',token.clientId).eq('order_id',token.orderId).maybeSingle();if(result.error||!result.data||result.data.public_token_hash!==secretDigest(raw))return NextResponse.json({error:'Payment session is unavailable'},{status:404});const order:any=result.data.commerce_orders;return NextResponse.json({status:result.data.status,verified_at:result.data.verified_at,order_reference:order?.reference,order_status:order?.status,payment_status:order?.payment_status})}catch(error:any){return NextResponse.json({error:error.message||'Payment status is unavailable'},{status:400})}}

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Client Website - Script Tag Embed Test</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%);
+      color: #0f172a;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 60px 20px;
+    }
+    .container {
+      max-width: 720px;
+      width: 100%;
+      background: #ffffff;
+      border-radius: 24px;
+      padding: 40px;
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.08);
+      border: 1px solid rgba(226, 232, 240, 0.8);
+    }
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #10b981;
+      background: #ecfdf5;
+      border: 1px solid #a7f3d0;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      margin-bottom: 16px;
+    }
+    h1 {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 12px;
+      color: #0f172a;
+    }
+    p {
+      color: #64748b;
+      font-size: 15px;
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+    .code-box {
+      background: #0f172a;
+      color: #f8fafc;
+      padding: 20px;
+      border-radius: 16px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      overflow-x: auto;
+      margin-bottom: 24px;
+      border: 1px solid #334155;
+    }
+    .info {
+      background: #f8fafc;
+      border-left: 4px solid #3b82f6;
+      padding: 16px 20px;
+      border-radius: 0 12px 12px 0;
+      font-size: 14px;
+      color: #334155;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <span class="badge">Live Embed Test</span>
+    <h1>Client Website Integration</h1>
+    <p>This demo simulates any client's third-party website (Shopify, WordPress, Webflow, React, HTML). The chatbox is loaded solely via the embed script tag below:</p>
+
+    <div class="code-box">
+&lt;!-- Paste this tag before &lt;/body&gt; on the client site --&gt;
+&lt;script 
+  src="/widget.js?v=8" 
+  data-ctx="demo_client" 
+  data-bot="demo_bot" 
+  defer&gt;
+&lt;/script&gt;
+    </div>
+
+    <div class="info">
+      <strong>How to test:</strong> Look at the bottom-right corner of this page. Click the circular launcher button with the green live status dot to open the exact concierge chatbox!
+    </div>
+  </div>
+
+  <!-- Client Website Embed Script Tag -->
+  <script src="/widget.js?v=8" data-ctx="demo_client" data-bot="demo_bot" defer></script>
+</body>
+</html>

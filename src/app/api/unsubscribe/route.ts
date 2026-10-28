@@ -1,0 +1,7 @@
+import {NextRequest,NextResponse} from 'next/server'
+import {verifyEmailToken} from '@/lib/email/bulkCrypto'
+import {supabase} from '@/lib/supabase'
+async function unsubscribe(req:NextRequest){const id=verifyEmailToken(String(req.nextUrl.searchParams.get('token')||''),'unsubscribe');if(!id)return false;const{data,error}=await supabase.rpc('bulk_email_unsubscribe',{p_recipient:id});return!error&&data===true}
+const page=(ok:boolean)=>new NextResponse(`<!doctype html><html><meta name="viewport" content="width=device-width"><body style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f5f5f7;margin:0;display:grid;min-height:100vh;place-items:center"><main style="max-width:480px;background:white;border:1px solid #ddd;border-radius:20px;padding:36px;text-align:center"><h1>${ok?'You’re unsubscribed':'This link is invalid'}</h1><p style="color:#6e6e73">${ok?'Marketing email has been disabled for this address. Transactional messages about your orders or bookings are unaffected.':'Please contact the sender if you still want to stop marketing email.'}</p></main></body></html>`,{status:ok?200:400,headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}})
+export async function GET(req:NextRequest){return page(await unsubscribe(req))}
+export async function POST(req:NextRequest){return(await unsubscribe(req))?new NextResponse(null,{status:204}):NextResponse.json({error:'Invalid unsubscribe token'},{status:400})}

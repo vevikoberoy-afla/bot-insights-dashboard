@@ -1,0 +1,252 @@
+PROFESSIONAL SUPPORT + SALES BOT
+Assessment of 3 reference designs, full build prompt, and phased integration plan
+=====================================================================
+
+PART A — ASSESSING THE 3 SYSTEM DESIGNS AGAINST OUR PRODUCT
+=====================================================================
+
+DESIGN 1 — Sebastian's Vertex AI chatbot (simple, cheap, RAG-lite)
+  Relevant: context injection, chat history in the prompt, multi-language
+  auto-detect via browser, topic-limiting instruction, chat logs → data
+  warehouse → dashboard. We already do all of this (embeddings + Groq +
+  history array + Analytics). USE: the topic-limiting instruction pattern
+  and the "stay on topic" guardrail — we don't have this yet.
+
+DESIGN 2 — Facebook Messenger-scale chat system (websockets, presence,
+  50M DAU)
+  Mostly NOT relevant — we don't need real-time bidirectional sockets,
+  online presence, or message fan-out at billions of messages/day scale.
+  USE: exactly one idea — the message_id sequencing + multi-device sync
+  concept. This maps directly to WhatsApp/Email continuity: a customer
+  messaging from phone then web should see the same conversation state.
+  We'll borrow the "cur_max_message_id per device" idea loosely for
+  cross-channel session continuity.
+
+DESIGN 3 — Chatbot System Design Interview framework (NLU, dialog
+  manager, hybrid response generation, safety, observability)
+  MOST relevant — this is the correct mental model for what "excellent"
+  means. We are currently missing:
+    - Explicit intent classification (we go straight to RAG)
+    - A dialog/state manager beyond raw message history
+    - Hybrid response strategy (rules+templates BEFORE LLM, not just
+      Q&A pairs)
+    - Moderation/safety layer on input
+    - Confidence-based escalation to human
+    - Formal observability metrics (we have some via messages table,
+      but no fallback-rate tracking, no drop-off tracking)
+  USE: almost all of it, adapted to our RAG-based architecture instead
+  of a classic NLU/intent-slot system.
+
+VERDICT: We don't need Design 2's infrastructure at all. We take
+Sebastian's simplicity + the Chatbot Interview Guide's rigor, and layer
+both on top of our EXISTING stack (Supabase + Gemini + Groq + pgvector).
+We are NOT rebuilding the brain — we are adding a proper pipeline
+AROUND the brain we already have.
+
+=====================================================================
+PART B — THE BUILD PROMPT (step by step, feature-complete)
+=====================================================================
+This is the actual prompt/spec to give to build the upgraded bot.
+No code — just the exact behavior and pipeline stages to implement.
+
+-------------------------------------------------
+STAGE 0 — INPUT SAFETY & NORMALIZATION (NEW)
+-------------------------------------------------
+Before anything touches the RAG pipeline:
+  - Trim, normalize whitespace, cap message length (already have 500
+    char cap — keep it)
+  - Basic moderation check: block/flag profanity, prompt-injection
+    attempts ("ignore previous instructions"), spam patterns
+  - Rate limit check (already have via Upstash — keep it)
+  - If flagged: return a polite deflection, log it, do NOT pass to LLM
+
+-------------------------------------------------
+STAGE 1 — INTENT CLASSIFICATION (NEW — lightweight, not a separate ML model)
+-------------------------------------------------
+Before running RAG, classify the message into ONE of these buckets
+using a fast, cheap Groq call (small/fast model, short prompt, single
+word output) OR simple keyword heuristics first, LLM as fallback:
+  - SALES_INQUIRY (product questions, pricing, "do you have X")
+  - ORDER_STATUS (tracking, delivery, order ID follow-up)
+  - SUPPORT_ISSUE (complaint, troubleshooting, return/refund)
+  - GENERAL_FAQ (hours, location, policies)
+  - HUMAN_REQUEST (explicitly asking for a person)
+  - OFF_TOPIC (unrelated to the business)
+This intent tag determines which path runs next AND gets logged for
+analytics (this is your Topic Insights data, made structured instead
+of just AI-summarized text).
+
+-------------------------------------------------
+STAGE 2 — ROUTING BASED ON INTENT
+-------------------------------------------------
+  OFF_TOPIC → polite redirect ("I can help with questions about
+    [business]. What would you like to know?") — do NOT call the
+    main LLM generation, save the cost
+  HUMAN_REQUEST → trigger handoff flow immediately (see Stage 6)
+  ORDER_STATUS → go to Stage 3a (slot-filling for order ID)
+  SALES_INQUIRY / SUPPORT_ISSUE / GENERAL_FAQ → go to Stage 3b
+    (existing 3-stage RAG lookup: Q&A pairs → cache → vector search)
+
+-------------------------------------------------
+STAGE 3a — SLOT-FILLING FOR ORDER LOOKUP (upgrade of existing feature)
+-------------------------------------------------
+We already have order ID detection via conversation pattern matching.
+Upgrade it to proper slot-filling:
+  - Required slot: order_id
+  - If missing: ask for it, mark session state "awaiting_order_id"
+  - If provided: validate format loosely, run the existing
+    lookupInDataSource() function
+  - If lookup fails: apologize, offer human handoff, do NOT guess
+  - If lookup succeeds: format a natural sentence (not raw data dump)
+    using the SAME Groq call pattern already built
+
+-------------------------------------------------
+STAGE 3b — RAG PIPELINE (existing — keep exactly as built)
+-------------------------------------------------
+Stage 1: Q&A pairs (95% match) → instant answer
+Stage 2: Query cache (98% match) → cached answer
+Stage 3: Vector search top-5 chunks → Groq generation
+No changes needed here — this part is already solid.
+
+-------------------------------------------------
+STAGE 4 — RESPONSE GENERATION RULES (upgrade to system prompt)
+-------------------------------------------------
+Add to the existing Groq system prompt:
+  - "Stay strictly on topics related to [business name] and its
+    products/services. If asked something unrelated, politely decline
+    and redirect." (topic-limiting guardrail from Design 1)
+  - "You are speaking with a potential or existing customer. If the
+    intent is SALES_INQUIRY, be warm and proactively mention relevant
+    add-ons or a call-to-action link if available in context."
+  - "If confidence in the answer is low (context barely relevant),
+    say so honestly rather than guessing: 'I'm not fully certain, but
+    based on what I have...'"
+  - Keep the strict grounding rule already in place (no hallucination)
+  - Response should end with a natural next-step when appropriate:
+    a link, an offer to connect to a human, or a follow-up question
+
+-------------------------------------------------
+STAGE 5 — SALES FOLLOW-UP LOGIC (NEW)
+-------------------------------------------------
+For SALES_INQUIRY intent specifically:
+  - After answering (e.g. price + warranty), append a soft close:
+    "Would you like me to help you place an order?" or send the
+    product page link if available (this reuses source_url from RAG)
+  - If customer says "no" / "not now": reply politely, close the loop,
+    tag the conversation "sales_declined" for later remarketing
+    (feeds into Campaigns module we scoped earlier)
+  - If customer says "yes": either hand off to human for checkout,
+    OR if a direct order/payment link exists in the dataset, send it
+
+-------------------------------------------------
+STAGE 6 — HUMAN HANDOFF (NEW — ties into Tickets/Inbox modules)
+-------------------------------------------------
+Trigger handoff when ANY of these happen:
+  - Intent = HUMAN_REQUEST
+  - 2 consecutive fallback ("I don't have that info") responses in
+    one session
+  - Sentiment/frustration detected (simple heuristic: repeated caps,
+    negative words, or explicit "this isn't helping")
+  - Order lookup fails twice
+On trigger:
+  - Auto-create a Ticket (tag: "AI Escalation", priority based on
+    intent — SUPPORT_ISSUE = higher priority than SALES_INQUIRY)
+  - Notify agent (bell icon badge, per your existing admin design)
+  - Bot tells customer: "Let me connect you with our team, they'll
+    follow up shortly" — never leave the customer hanging
+  - Full conversation context attached to the ticket (no repeat needed)
+
+-------------------------------------------------
+STAGE 7 — SESSION / STATE MANAGEMENT (upgrade of existing sessionStorage)
+-------------------------------------------------
+  - Keep existing sessionStorage history array (client-side, works
+    fine for website widget)
+  - ADD: server-side session state for slot-filling progress
+    (awaiting_order_id, sales_declined, escalated) — small addition
+    to the messages/sessions table, not a new system
+  - Session idle timeout: after 30 min inactivity, next message starts
+    a "fresh" greeting context but conversation history stays logged
+  - Cross-channel note: for WhatsApp/Email (when built), session ties
+    to phone number/email address instead of sessionStorage — same
+    state fields, different key
+
+-------------------------------------------------
+STAGE 8 — OBSERVABILITY (upgrade of existing Analytics)
+-------------------------------------------------
+Add these NEW tracked metrics (feed into your Analytics blueprint doc
+from before):
+  - Intent distribution (% SALES_INQUIRY vs SUPPORT_ISSUE vs etc.)
+  - Fallback rate (% of messages that hit "I don't have that info")
+  - Escalation rate (% of sessions that triggered human handoff)
+  - Sales close signals (% of SALES_INQUIRY sessions ending in "yes")
+  - Drop-off point (last intent before a session goes idle)
+These feed directly into your existing Knowledge Gap Report and Topic
+Insights sections — no new dashboard needed, just new columns.
+
+=====================================================================
+PART C — PHASED INTEGRATION PLAN WITH EXISTING APP
+=====================================================================
+
+PHASE 1 — Safety + Topic Guardrail (fastest, lowest risk)
+  - Add moderation/input check before existing /api/chat logic runs
+  - Add "stay on topic" instruction to existing Groq system prompt
+  - No schema changes needed
+  - Ships in: hours, not days
+
+PHASE 2 — Intent Classification + Routing
+  - Add lightweight intent classification step (keyword heuristic
+    first, Groq fallback for ambiguous cases) at the top of /api/chat
+  - Add OFF_TOPIC short-circuit (skip RAG entirely, save API cost)
+  - Add HUMAN_REQUEST short-circuit → routes to Stage 6 (build ticket
+    stub first, even if Tickets module UI isn't done yet — just log
+    to a new "escalations" table)
+  - New table: intent logged on the messages table (add a column)
+
+PHASE 3 — Slot-Filling Upgrade for Order Lookup
+  - Upgrade existing detectOrderIdResponse() into a proper session
+    state field instead of pattern-matching every message
+  - Add session state columns: awaiting_order_id, escalated,
+    sales_declined (small addition to messages/sessions)
+
+PHASE 4 — Sales Follow-Up Logic
+  - Add the soft-close logic to Stage 4/5 system prompt
+  - Tag sessions "sales_declined" / "sales_interested" — this data
+    becomes the seed list for your future Campaigns/remarketing module
+
+PHASE 5 — Human Handoff (ties into Tickets module build)
+  - Build the "escalations" table fully into the real Tickets module
+    (from your earlier SaaS blueprint doc — Module 1)
+  - Wire up agent notification (bell icon)
+  - This phase depends on Tickets UI existing — can run in parallel
+    with Tickets module development
+
+PHASE 6 — Observability Upgrade
+  - Add intent distribution, fallback rate, escalation rate, sales
+    close rate as new sections in the existing Analytics page
+  - Pure reporting layer — no changes to the chat pipeline itself,
+    just new SELECT queries against data already being logged
+
+-------------------------------------------------
+WHAT STAYS 100% UNCHANGED
+-------------------------------------------------
+- Vector search / pgvector / Gemini embeddings
+- Q&A pairs stage + query cache stage (still checked first)
+- Groq as the generation model
+- Rate limiting (Upstash)
+- Widget.js frontend (only the payload gets slightly richer — intent
+  tag optional in response, used for the sales follow-up UI if wanted)
+- Dataset/bot architecture from the multi-bot doc — this whole bot
+  upgrade applies PER BOT, same as everything else
+
+-------------------------------------------------
+BUILD ORDER PRIORITY SUMMARY
+-------------------------------------------------
+1. Phase 1 (Safety + topic guardrail) — do this first, always
+2. Phase 2 (Intent classification) — biggest quality jump, do second
+3. Phase 3 (Slot-filling) — polish on existing feature
+4. Phase 4 (Sales follow-up) — revenue-facing, do once 1-3 are stable
+5. Phase 5 (Human handoff) — depends on Tickets module timeline
+6. Phase 6 (Observability) — do last, it's just reporting on data
+   already being captured from Phase 2 onward
+
+END OF DOCUMENT

@@ -1,0 +1,21 @@
+const fs = require('node:fs')
+const assert = require('node:assert/strict')
+
+const read = path => fs.readFileSync(path, 'utf8')
+const hub = read('src/components/features/StorefrontHub.tsx')
+const sidebar = read('src/components/layout/sidebar.tsx')
+const catalog = read('src/lib/saas/catalog.ts')
+const storePage = read('src/app/(dashboard)/features/stores/[id]/page.tsx')
+
+assert(!hub.includes('LEGACY PLAN'), 'legacy plan banner must not be rendered')
+assert(!hub.includes('/settings/usage'), 'store home must not render the old usage link')
+assert(hub.includes('Everything in {active?.name}'), 'store home must render its feature-card collection')
+assert(hub.includes('Create new store'), 'store settings must expose the create-store action')
+assert(hub.includes("/features/stores/${store.id}"), 'store settings must link to isolated store homes')
+assert(sidebar.includes('storefronts.map'), 'sidebar must render all configured storefronts')
+assert(sidebar.includes('/features/stores/'), 'sidebar storefronts must use store-specific routes')
+assert(storePage.includes('initialStoreId={id}'), 'store route must select the requested store')
+assert(catalog.includes("pathname.startsWith('/features/stores/')"), 'store home must map to overview access')
+assert(catalog.includes("pathname.startsWith('/features/store-settings')"), 'store settings must map to settings access')
+
+console.log('Storefront UI regression checks passed')

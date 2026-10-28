@@ -1,0 +1,7 @@
+import {createHmac,timingSafeEqual} from 'node:crypto'
+function secret(){const value=process.env.WHATSAPP_CLICK_SIGNING_SECRET||process.env.BULK_EMAIL_SIGNING_SECRET||(process.env.NODE_ENV!=='production'?process.env.SUPABASE_SERVICE_ROLE_KEY:undefined);if(!value)throw new Error('WHATSAPP_CLICK_SIGNING_SECRET is required');return value}
+const encode=(value:string)=>Buffer.from(value).toString('base64url'),decode=(value:string)=>Buffer.from(value,'base64url').toString(),sign=(value:string)=>createHmac('sha256',secret()).update(value).digest('base64url')
+const https=(value:unknown)=>{try{const url=new URL(String(value));return url.protocol==='https:'&&!!url.hostname}catch{return false}}
+export function createWhatsAppClickToken(recipientId:string,target:string){if(!https(target))throw new Error('WhatsApp CTA targets must use HTTPS.');const payload=encode(JSON.stringify({r:recipientId,u:target,p:'wa_click',exp:Date.now()+30*86400000,v:1}));return`${payload}.${sign(payload)}`}
+export function verifyWhatsAppClickToken(token:string){const[payload,signature]=token.split('.');if(!payload||!signature)return null;const expected=sign(payload),left=Buffer.from(signature),right=Buffer.from(expected);if(left.length!==right.length||!timingSafeEqual(left,right))return null;try{const value=JSON.parse(decode(payload));return value?.p==='wa_click'&&typeof value.r==='string'&&https(value.u)&&Number(value.exp)>Date.now()?{recipientId:value.r as string,target:value.u as string}:null}catch{return null}}
+

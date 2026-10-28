@@ -1,0 +1,8 @@
+import {NextRequest,NextResponse} from 'next/server'
+import {requireWorkspace,saasError,SaaSError} from '@/lib/saas/context'
+import {supabase} from '@/lib/supabase'
+import {redis} from '@/lib/redis'
+const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const number=(value:unknown,fallback:number)=>value===undefined||value===null||value===''?fallback:Number(value)
+export async function GET(req:NextRequest){try{const ctx=await requireWorkspace(null,'campaigns'),ids=String(req.nextUrl.searchParams.get('ids')||'').split(',').filter(id=>uuid.test(id)).slice(0,50);if(!ids.length)throw new SaaSError('INVALID_INPUT','Provide campaign identifiers.',400);const result=await supabase.from('campaigns').select('id,status,recipients_count,sent_count,delivered_count,read_count,click_count,failed_count,opt_out_count,completed_at,failure_reason').eq('client_id',ctx.workspaceId).eq('channel','whatsapp').in('id',ids);if(result.error)throw result.error;const campaigns=await Promise.all((result.data||[]).map(async row=>{const metrics=await redis.hgetall<Record<string,string|number>>(`campaign:${row.id}:metrics`).catch(()=>null);return metrics?{...row,status:String(metrics.status||row.status),recipients_count:number(metrics.total,row.recipients_count),sent_count:number(metrics.sent,row.sent_count),delivered_count:number(metrics.delivered,row.delivered_count),read_count:number(metrics.read,row.read_count),click_count:number(metrics.clicked,row.click_count),failed_count:number(metrics.failed,row.failed_count),opt_out_count:number(metrics.opted_out,row.opt_out_count)}:row}));return NextResponse.json({campaigns},{headers:{'Cache-Control':'private, no-store'}})}catch(error){return saasError(error)}}
+

@@ -1,0 +1,1051 @@
+VITTAIN AI — MULTI-BOT, MULTI-CHANNEL CLIENT ARCHITECTURE
+==============================================================
+Full feature spec: a client can create MULTIPLE bots, each bot has its
+OWN channels (WhatsApp/Email/SMS/Web), OWN datasets, OWN chat history,
+OWN tickets, OWN agents — plus a central admin system for YOU to track
+usage and finances across every client and every bot.
+
+==============================================================
+PART 1 — THE CORE CONCEPT (read this first)
+==============================================================
+
+OLD MODEL (what you have now):
+  1 Client = 1 Bot = 1 Context = 1 Website
+
+NEW MODEL (what you're building):
+  1 Client = MANY Bots
+  Each Bot = its own context_id, its own knowledge base, its own
+             channels, its own tickets, its own agents, its own analytics
+
+WHY: A single business might want a "Sales Bot" on WhatsApp trained on
+product catalog + pricing, and a completely separate "Support Bot" on
+Email trained on troubleshooting docs. Different knowledge, different
+tone, different channel — same client account.
+
+EXAMPLE:
+  Client: "Northwind Retail"
+    Bot 1: "Sales Assistant" — connected to WhatsApp + Web Widget
+           Dataset: product catalog, pricing sheet
+    Bot 2: "Order Support" — connected to Email + SMS
+           Dataset: order database (Google Sheets), shipping policy
+    Bot 3: "HR Helpdesk" — connected to Web Widget only (internal use)
+           Dataset: employee handbook PDF
+
+Each bot is fully independent but rolls up into the same Client account
+for billing and top-level reporting.
+
+==============================================================
+PART 2 — UPDATED SIDEBAR STRUCTURE
+==============================================================
+
+OVERVIEW
+  - Dashboard (global, across all clients + all bots)
+
+CLIENTS
+  - All Clients
+  - Add New Client
+  - Client Health
+
+  → Clicking a client opens CLIENT DETAIL (see Part 3)
+
+CENTRAL TRACKING (your internal admin-only section)
+  - Usage & Cost Monitor
+  - Financial Overview / Revenue
+  - Plan & Quota Manager
+  - System Health
+
+ANALYTICS (global, cross-client)
+  - Platform Analytics
+  - Knowledge Gap Report (all clients)
+  - Token Usage Report (all clients)
+
+DATASETS (global dataset library, reusable across bots)
+  - All Knowledge Bases
+  - Shared Templates
+
+INTEGRATIONS (platform-level, not per-bot)
+  - Meta Business Connection (WhatsApp/Instagram master account)
+  - Email Provider Connection (Resend/Postmark master account)
+  - Webhooks
+  - API Keys
+
+NOTEPAD
+  - Internal team notes
+  - Saved snippets
+
+SETTINGS
+  - Organization Profile
+  - Team Management
+  - Security
+  - Billing & Subscription (your platform's own billing)
+  - Audit Logs
+
+==============================================================
+PART 3 — CLIENT DETAIL PAGE (/admin/client/[id])
+==============================================================
+
+TOP OF PAGE:
+  - Client name, logo/avatar, status badge, email, created date
+  - "+ New Bot" button (top right — this is the key new action)
+
+TABS AT CLIENT LEVEL:
+  Tab 1 — Overview
+  Tab 2 — Bots (list of all bots under this client)
+  Tab 3 — Billing (this client's plan, usage, invoices)
+  Tab 4 — Team (which agents/staff have access to this client)
+  Tab 5 — Client Settings (name, email, notes, danger zone/delete)
+
+------------------------------------
+TAB 1 — CLIENT OVERVIEW
+------------------------------------
+  - Client info card (name, email, website, industry, notes)
+  - Summary KPI row: Total Bots, Total Messages (all bots), Total
+    Tickets Open, Monthly Cost
+  - Bot performance comparison table: Bot Name | Channel(s) | Messages
+    this week | Deflection Rate | Status
+
+------------------------------------
+TAB 2 — BOTS (the bot list + creation)
+------------------------------------
+  - Grid or table of all bots under this client
+  - Each bot card shows: Bot name, icon, connected channel badges
+    (WhatsApp/Email/SMS/Web icons), status (Active/Paused/Crawling),
+    messages this week, "Open" button
+  - "+ New Bot" button opens the Bot Creation Wizard:
+      Step 1: Bot name + purpose (Sales/Support/HR/Custom)
+      Step 2: Choose channels to connect (multi-select: WhatsApp,
+              Email, SMS, Web Widget, Instagram)
+      Step 3: Build knowledge base (crawl URL / upload files / manual
+              text / connect database) — same flow you already built
+      Step 4: Review & Launch
+
+  → Clicking a bot card opens BOT DETAIL (see Part 4 — this is where
+    the real depth lives)
+
+------------------------------------
+TAB 3 — CLIENT BILLING
+------------------------------------
+  - Current plan (Starter/Pro/Enterprise)
+  - Usage this cycle: messages used / limit, bots used / limit
+  - Cost breakdown per bot (if usage-based pricing)
+  - Invoice history
+  - "Upgrade Plan" button
+
+------------------------------------
+TAB 4 — CLIENT TEAM
+------------------------------------
+  - List of agents/staff with access to this client's bots
+  - Roles: Owner, Agent, Viewer
+  - "+ Invite" button
+
+------------------------------------
+TAB 5 — CLIENT SETTINGS
+------------------------------------
+  - Edit name, email, website, notes
+  - Danger zone: Delete client (removes all bots, all data)
+
+==============================================================
+PART 4 — BOT DETAIL PAGE (/admin/client/[id]/bot/[botId])
+==============================================================
+This is the deepest, most important screen. Each bot is basically its
+own mini-dashboard, scoped to just this bot's data.
+
+TOP OF PAGE:
+  - Bot name, purpose tag, status toggle (Active/Paused)
+  - Connected channel icons (click to jump to Channels tab)
+  - "View Live Widget" / "Test Bot" button
+
+TABS AT BOT LEVEL:
+  Tab 1 — Overview
+  Tab 2 — Channels
+  Tab 3 — Datasets (Knowledge Base)
+  Tab 4 — Chat / Inbox
+  Tab 5 — Tickets
+  Tab 6 — Agents
+  Tab 7 — Analytics
+  Tab 8 — Appearance
+  Tab 9 — Settings
+
+------------------------------------
+BOT TAB 1 — OVERVIEW
+------------------------------------
+  - KPI cards scoped to THIS bot: Messages this week, Deflection Rate,
+    Open Tickets, Active Channels count
+  - Mini traffic chart (this bot only)
+  - Recent conversations preview (last 5)
+
+------------------------------------
+BOT TAB 2 — CHANNELS
+------------------------------------
+  Each bot can connect its OWN set of channels, independent of other
+  bots under the same client.
+  - WhatsApp card: Connect/Configure — phone number, Meta template
+    status, "Send test message" button
+  - Email card: Connect/Configure — support email address, inbound
+    parsing status, "Send test email" button
+  - SMS card: Connect/Configure — Twilio number, status
+  - Web Widget card: Embed snippet (copy button), live preview
+  - Instagram card: Connect via Meta OAuth
+  Each card shows: Connected/Not Connected badge, last message
+  received time, message count via this channel
+
+------------------------------------
+BOT TAB 3 — DATASETS (Knowledge Base)
+------------------------------------
+  - Sub-sections exactly like your current Client Manager:
+    - Crawled Pages (list, search, delete)
+    - Q&A Pairs (list, add, delete)
+    - Uploaded Files (PDF/DOCX manager)
+    - Data Sources (order DB — Sheets/API/CSV connection + test)
+  - Search bar across all dataset types
+  - "Re-crawl" button with last crawl date shown
+
+------------------------------------
+BOT TAB 4 — CHAT / INBOX (this bot's conversations)
+------------------------------------
+  - Same unified inbox pattern, but filtered to ONLY this bot
+  - Channel icon per conversation row (since one bot can have multiple
+    channels connected)
+  - Full thread view, reply composer, "Convert to Ticket", "Assign
+    to Agent"
+
+------------------------------------
+BOT TAB 5 — TICKETS (this bot's tickets)
+------------------------------------
+  - Kanban board scoped to this bot only
+  - Same structure as global Tickets page — Open/In Progress/Waiting/
+    Resolved/Closed columns
+
+------------------------------------
+BOT TAB 6 — AGENTS (who handles this bot's handoffs)
+------------------------------------
+  - List of agents assigned to this specific bot
+  - Assignment rules: round-robin, manual, or specific agent per channel
+  - Agent workload indicator (open tickets/conversations per agent)
+
+------------------------------------
+BOT TAB 7 — ANALYTICS (this bot's analytics)
+------------------------------------
+  - Everything from your Analytics blueprint doc, but scoped to one bot:
+    traffic chart, topic insights, knowledge gaps, source attribution,
+    token usage & cost FOR THIS BOT specifically
+
+------------------------------------
+BOT TAB 8 — APPEARANCE
+------------------------------------
+  - Brand color, widget title, welcome message (for Web Widget)
+  - WhatsApp business profile name/avatar (for WhatsApp)
+  - Email sender name/signature (for Email)
+  - Each channel can have slightly different branding if needed
+
+------------------------------------
+BOT TAB 9 — SETTINGS
+------------------------------------
+  - Bot name, purpose, pause/resume toggle
+  - Response tone (Concise/Detailed/Friendly/Formal)
+  - Fallback message customization
+  - Delete bot (danger zone)
+
+==============================================================
+PART 5 — CENTRAL TRACKING SYSTEM (for YOU, the platform admin)
+==============================================================
+This is separate from anything a client sees. Only you (or your team)
+can access this. Lives under "CENTRAL TRACKING" in the sidebar.
+
+------------------------------------
+5.1 — USAGE & COST MONITOR
+------------------------------------
+  - Table: Client | Bot | Gemini calls | Groq calls | Firecrawl pages |
+    WhatsApp conversations | Estimated cost this month
+  - Sortable by highest cost, filterable by client
+  - Alert badges when a client's usage spikes abnormally
+  - Global API quota bars (your total usage vs free/paid tier limits
+    across Gemini, Groq, Firecrawl, Upstash, Meta, Resend)
+
+------------------------------------
+5.2 — FINANCIAL OVERVIEW / REVENUE
+------------------------------------
+  - MRR (Monthly Recurring Revenue) — big number, top of page
+  - Revenue trend chart (last 12 months)
+  - Revenue by plan tier (Starter/Pro/Enterprise breakdown)
+  - Churn rate this month
+  - Client-level financial table: Client | Plan | MRR | Bots | Status |
+    Next billing date
+  - Cost vs Revenue per client (your API cost to run their bots vs
+    what they pay you — profitability per client)
+
+------------------------------------
+5.3 — PLAN & QUOTA MANAGER
+------------------------------------
+  - Define plan tiers: name, price, bot limit, message limit, channel
+    limit, features included
+  - Assign/change a client's plan manually
+  - Override quotas for specific clients (enterprise custom deals)
+
+------------------------------------
+5.4 — SYSTEM HEALTH
+------------------------------------
+  - Status of every external service: Supabase, Gemini, Groq,
+    Firecrawl, Upstash, Meta WhatsApp API, Resend/Postmark, Stripe
+  - Green/red indicator per service
+  - Recent errors/incidents log
+
+==============================================================
+PART 6 — DATABASE SCHEMA CHANGES NEEDED
+==============================================================
+
+RESTRUCTURE — contexts becomes bots:
+  bots
+    id, client_id, name, purpose, status, tone, created_at, updated_at
+  (this replaces/extends your current "contexts" table — a bot IS a
+  context, just with a client_id foreign key and a name/purpose added)
+
+NEW — channels (per bot, not per client):
+  bot_channels
+    id, bot_id, channel_type (whatsapp/email/sms/web/instagram),
+    identifier (phone/email), credentials, status, connected_at
+
+NEW — agents:
+  agents
+    id, name, email, role (owner/agent/viewer), created_at
+
+NEW — agent assignments:
+  bot_agents
+    id, bot_id, agent_id, assignment_rule
+
+EXISTING TABLES — add bot_id instead of context_id (rename column,
+same purpose): chunks, qa_pairs, messages, query_cache, data_sources,
+tickets
+
+NEW — usage tracking:
+  api_usage_log
+    id, client_id, bot_id, provider, calls_count, cost_estimate, date
+
+NEW — client billing:
+  subscriptions
+    id, client_id, plan_id, stripe_subscription_id, status,
+    current_period_end
+
+NEW — plans:
+  plans
+    id, name, price, bot_limit, message_limit, channel_limit, features
+
+==============================================================
+PART 7 — QUICK REFERENCE: FEATURE → LOCATION MAP
+==============================================================
+
+WhatsApp connection for a bot        → Bot Detail → Channels tab
+Email connection for a bot           → Bot Detail → Channels tab
+SMS connection for a bot             → Bot Detail → Channels tab
+Bot's knowledge base / crawled pages → Bot Detail → Datasets tab
+Bot's order database connection      → Bot Detail → Datasets tab
+Bot's live chat conversations        → Bot Detail → Chat/Inbox tab
+Bot's support tickets                → Bot Detail → Tickets tab
+Which agent handles this bot         → Bot Detail → Agents tab
+Bot's own analytics                  → Bot Detail → Analytics tab
+Bot's brand color/widget text        → Bot Detail → Appearance tab
+Bot pause/resume/delete              → Bot Detail → Settings tab
+Creating a new bot for a client      → Client Detail → Bots tab → "+ New Bot"
+Client's overall billing             → Client Detail → Billing tab
+Client's team/staff access           → Client Detail → Team tab
+YOUR cost per client (all APIs)      → Central Tracking → Usage & Cost Monitor
+YOUR revenue across all clients      → Central Tracking → Financial Overview
+Changing a client's plan             → Central Tracking → Plan & Quota Manager
+Overall platform health              → Central Tracking → System Health
+Cross-client knowledge gaps          → Analytics → Knowledge Gap Report
+Global API keys (your platform's)    → Integrations → API Keys
+Master WhatsApp/Meta business acct   → Integrations → Meta Business Connection
+
+END OF DOCUMENT
+
+
+
+UPDATE — SHARED / SEPARATE DATASETS ACROSS BOTS
+====================================================
+This changes the relationship between Bots and Datasets from
+1-to-1 to MANY-to-MANY.
+
+------------------------------------
+NEW CONCEPT
+------------------------------------
+A "Dataset" (a crawled website, an uploaded file set, a manual
+knowledge base) is now its own independent object — NOT locked
+to a single bot.
+
+A Client can:
+  - Crawl multiple different websites → each crawl creates a
+    separate Dataset
+  - Create multiple Bots → each Bot picks ONE OR MORE Datasets
+    to pull knowledge from
+
+EXAMPLE:
+  Client: "Northwind Retail"
+    Datasets:
+      - "Main Website" (crawled northwindretail.com)
+      - "Product Catalog PDF" (uploaded file)
+      - "Support Docs Website" (crawled help.northwindretail.com)
+      - "Order Database" (Google Sheets connection)
+
+    Bots:
+      - "Sales Bot" (WhatsApp) → uses: Main Website + Product Catalog PDF
+      - "Support Bot" (Email)  → uses: Support Docs Website + Order Database
+      - "General Bot" (Web Widget) → uses: ALL FOUR datasets combined
+
+So two bots can share the exact same dataset, or each bot can have
+its own completely separate dataset — client's choice, per bot.
+
+------------------------------------
+WHERE THIS LIVES IN THE UI
+------------------------------------
+
+NEW SIDEBAR-LEVEL SECTION (client-level, above Bots):
+  Client Detail → Tab: "Datasets" (NEW TAB, sits next to "Bots" tab)
+    - List of all datasets this client has created
+    - "+ New Dataset" button → same creation flow as before
+      (crawl URL / upload file / manual text / connect DB)
+    - Each dataset card shows: name, type (Crawl/Upload/Manual/DB),
+      size (chunk count), last updated, "used by N bots" tag
+
+BOT CREATION WIZARD — updated Step 3:
+  Old: "Build knowledge base" (crawl/upload/manual/db — created new)
+  New: "Assign Datasets" — a multi-select list of the client's
+       EXISTING datasets, with a "+ Create New Dataset" option
+       inline if they want a fresh one just for this bot
+
+BOT DETAIL PAGE — Tab 3 renamed:
+  Old: "Datasets (Knowledge Base)" — owned the data directly
+  New: "Datasets" — shows which datasets are LINKED to this bot,
+       with:
+         - Checklist of assigned datasets (toggle on/off)
+         - "+ Link existing dataset" button
+         - "+ Create new dataset for this bot" button
+         - Each linked dataset shows a small "also used by: Sales
+           Bot, General Bot" note if shared
+
+------------------------------------
+DATABASE SCHEMA UPDATE
+------------------------------------
+
+REPLACES the old 1:1 bot→context relationship:
+
+datasets (was effectively "contexts" before, now standalone)
+  id, client_id, name, type (crawl/upload/manual/database),
+  source_url, crawl_status, chunk_count, created_at, updated_at
+
+bot_datasets (NEW — the many-to-many join table)
+  id, bot_id, dataset_id, linked_at
+
+chunks, qa_pairs, data_sources — now reference dataset_id
+  instead of bot_id or context_id directly
+  (a chunk belongs to a Dataset, not to a Bot — the Bot just
+  pulls from whichever Datasets are linked to it)
+
+bots table stays as before:
+  id, client_id, name, purpose, status, tone, created_at, updated_at
+  (no longer holds knowledge directly — it's just config + channels
+  + which datasets are linked via bot_datasets)
+
+------------------------------------
+HOW THE CHAT QUERY CHANGES (/api/chat)
+------------------------------------
+OLD: vector search ran against chunks WHERE context_id = X
+NEW: vector search runs against chunks WHERE dataset_id IN
+     (SELECT dataset_id FROM bot_datasets WHERE bot_id = X)
+
+This is the only backend logic change — everything else (Q&A
+pairs check, query cache, Groq generation) stays exactly the same,
+just the WHERE clause now spans multiple datasets per bot.
+
+------------------------------------
+UPDATED QUICK REFERENCE — FEATURE → LOCATION
+------------------------------------
+Crawl a new website (as a dataset)     → Client Detail → Datasets tab → "+ New Dataset"
+Upload a PDF (as a dataset)            → Client Detail → Datasets tab → "+ New Dataset"
+Assign datasets to a bot               → Bot Detail → Datasets tab → "Link existing dataset"
+See which bots use a dataset           → Client Detail → Datasets tab → dataset card "used by" tag
+Create a bot and pick its data         → Client Detail → Bots tab → "+ New Bot" wizard Step 3
+
+SIDEBAR STRUCTURE + OVERVIEW DASHBOARD FEATURES
+===================================================
+
+SIDEBAR NAVIGATION (with sub-options)
+----------------------------------------
+
+OVERVIEW
+  - Dashboard (main landing page)
+
+CLIENTS
+  - All Clients (list/grid)
+  - Add New Client
+  - Client Health (failed crawls, inactive, stale)
+
+CONVERSATIONS
+  - Inbox (unified, all channels)
+  - Tickets (kanban board)
+  - Conversation History (raw log/search)
+
+CONTACTS
+  - All Contacts
+  - Segments
+
+CAMPAIGNS
+  - All Campaigns
+  - Create Campaign
+  - Templates (canned responses)
+
+ANALYTICS
+  - Overview Analytics (traffic, deflection, CSAT)
+  - Knowledge Gap Report
+  - Source Attribution
+  - Token Usage & Cost
+
+DATASETS
+  - Knowledge Base (per client — chunks, files, crawled pages)
+  - Q&A Pairs
+  - Uploads (PDF/DOCX manager)
+  - Data Sources (order DB connections — Sheets/API/CSV)
+
+INTEGRATIONS
+  - Channels (WhatsApp, Email, Web Widget, Instagram, SMS)
+  - Webhooks
+  - API Keys
+  - Connected Apps (Stripe, Zapier, etc.)
+
+NOTEPAD
+  - Internal notes (team scratchpad, per client or global)
+  - Saved snippets / drafts
+
+SETTINGS
+  - Organization Profile
+  - Team Management (invite/roles)
+  - Security (2FA, sessions)
+  - Notifications
+  - Billing & Subscription
+  - Audit Logs
+
+
+===================================================
+OVERVIEW DASHBOARD — FEATURES (main page content)
+===================================================
+
+1. KPI CARDS ROW
+   - Total Clients
+   - Active Bots
+   - Total Messages
+   - Knowledge Chunks
+   - Deflection Rate
+   - Error Rate
+
+2. TRAFFIC TREND CHART
+   - Message volume, last 7/30 days
+
+3. UNANSWERED QUESTIONS WIDGET
+   - Top 5 fallback questions this week, across all clients
+
+4. API USAGE / QUOTA METER
+   - Gemini, Groq, Firecrawl, Upstash — usage bars vs free limits
+
+5. RECENT ACTIVITY FEED
+   - Last 10-15 events (crawls, new clients, key rotations, errors)
+
+6. CLIENT HEALTH LIST
+   - Failed crawls, inactive clients, stale context
+
+7. TOP CLIENTS BY VOLUME
+   - Ranked top 5 by message count
+
+8. SEARCHABLE CLIENT GRID
+   - Quick search + "+ New Client" button
+
+END OF PAGE — nothing below section 8.
+
+VITTAIN AI — COMPLETE FEATURE LIST & UI BUILD PROMPT
+=======================================================
+Part A: Where every feature lives (page-by-page)
+Part B: Copy-paste prompt for any AI to build the UI
+
+=======================================================
+PART A — DETAILED FEATURE LIST BY PAGE
+=======================================================
+
+-------------------------------------------------------
+SIDEBAR NAVIGATION (final structure)
+-------------------------------------------------------
+MAIN
+  - Dashboard
+  - Inbox
+  - Tickets
+  - Contacts
+  - Conversations
+  - Campaigns
+  - Analytics
+  - Clients
+  - New Chatbot
+
+SETTINGS (collapsible section at bottom)
+  - Templates
+  - Channels
+  - Webhooks
+  - API Keys
+  - Audit Logs
+  - Billing
+
+-------------------------------------------------------
+1. DASHBOARD (/admin) — already built, keep as is
+-------------------------------------------------------
+- 4 KPI cards: Total Clients, Active Bots, Messages, Knowledge Chunks
+- Client grid with search
+- "Add Client" button top right
+
+-------------------------------------------------------
+2. INBOX (/admin/inbox) — NEW
+-------------------------------------------------------
+LAYOUT: 2-column split screen (list left, thread right)
+
+LEFT PANEL — Conversation list:
+  - Channel icon per row (Web / WhatsApp / Email / SMS / Instagram / Messenger / Telegram)
+  - Contact name + last message preview
+  - Unread indicator (bold + dot)
+  - Timestamp
+  - Filter tabs on top: All / Unassigned / Mine / Unread
+  - Search bar
+
+RIGHT PANEL — Active thread:
+  - Full message history, channel-styled bubbles
+  - Quick reply composer at bottom
+  - Canned Response selector (slash command "/greeting")
+  - "Assign to Agent" dropdown (top right of thread)
+  - "Convert to Ticket" button (top right of thread)
+  - Snooze button
+  - Typing indicator / online status dot next to contact name
+
+RIGHT SIDEBAR (collapsible, contact context panel):
+  - Contact name, channel, tags
+  - Link to full Contact Profile
+  - Past ticket count
+  - Internal notes field
+
+-------------------------------------------------------
+3. TICKETS (/admin/tickets) — NEW
+-------------------------------------------------------
+LAYOUT: Kanban board, 5 columns
+
+COLUMNS (left to right):
+  Open → In Progress → Waiting on Customer → Resolved → Closed
+
+EACH TICKET CARD SHOWS:
+  - Ticket ID + subject line
+  - Priority badge (Low/Medium/High/Urgent — color coded)
+  - Assignee avatar
+  - SLA timer (countdown, turns red near breach)
+  - Client name tag
+
+TOP BAR:
+  - "+ New Ticket" button
+  - Filter: by priority, by assignee, by client
+  - View toggle: Kanban / Table
+
+TICKET DETAIL VIEW (click any card, opens full page or slide-over panel):
+  - Full conversation thread (same as inbox thread)
+  - Internal notes section (private, agent-only, different background color)
+  - Priority dropdown
+  - Assignee dropdown
+  - Status dropdown
+  - Tags/labels input (multi-select chips)
+  - SLA timer with breach warning
+  - Activity log at bottom (Created → First Response → Resolved timestamps)
+
+CREATE TICKET MODAL:
+  - Subject, Description, Priority, Assign To, Client — simple form
+
+AUTO-CREATION RULE (backend logic, shown as a badge on auto-created tickets):
+  - Ticket auto-created when AI hits fallback response → tagged "AI Escalation"
+
+-------------------------------------------------------
+4. CONTACTS / CRM (/admin/contacts) — NEW
+-------------------------------------------------------
+LIST VIEW:
+  - Table: Name, Email, Phone, Channel icon, Last Active, Total Conversations, Tags
+  - Search + filter bar
+  - "Import CSV" / "Export CSV" buttons top right
+  - Bulk select checkboxes for merge/tag actions
+
+CONTACT PROFILE (click a row):
+  - Header: name, avatar, primary channel, tags
+  - Tab 1 — Activity Timeline: first seen, last message, tickets raised (chronological feed)
+  - Tab 2 — Conversations: every conversation across every channel, chronological
+  - Tab 3 — Properties: custom fields (company, plan, location) — editable
+  - Tab 4 — Notes: internal agent notes, threaded comments
+  - "Merge duplicate" button if system detects a possible duplicate
+
+SEGMENT BUILDER (separate modal or side panel):
+  - Rule builder UI: "Contacts who [asked about] [pricing] in the [last 7 days]"
+  - Save segment with a name, reuse in Campaigns
+
+-------------------------------------------------------
+5. CAMPAIGNS (/admin/campaigns) — NEW
+-------------------------------------------------------
+CAMPAIGN LIST VIEW:
+  - Table: Name, Channel icon, Status badge (Draft/Scheduled/Sent/Failed), Recipients count, Open Rate %, Click Rate %
+  - "+ New Campaign" button
+
+CAMPAIGN CREATOR — 5-step wizard (stepper UI, one step per screen):
+  Step 1 — Select Channel: WhatsApp / Email / SMS (icon cards, pick one)
+  Step 2 — Select Audience: pick a saved Segment OR upload CSV
+  Step 3 — Compose Message (the Canvas):
+      - Rich text toolbar (bold, italic, link, list)
+      - Variable insert button → {{first_name}}, {{order_id}}, {{company}}
+      - Emoji picker
+      - Image/attachment upload
+      - Live preview pane on the right showing exact channel rendering
+        (WhatsApp bubble mockup / Email layout mockup / SMS character-count mockup)
+      - "Save as template" checkbox
+  Step 4 — Schedule: Send now / Schedule for date+time (calendar picker)
+      - Optional: A/B test toggle → create Variant B, set audience split %
+  Step 5 — Review & Send: summary card of everything above, final "Send Campaign" button
+
+CAMPAIGN DETAIL VIEW (after sending):
+  - Sent count, Delivered count, Open rate, Click rate, Failed count
+  - Line chart of opens/clicks over time
+  - Recipient table with individual delivery status
+
+-------------------------------------------------------
+6. TEMPLATES / CANNED RESPONSES (/admin/templates) — NEW
+-------------------------------------------------------
+LIBRARY VIEW:
+  - Grid of template cards grouped by category tabs:
+    Greeting / FAQ / Troubleshooting / Closing / Upsell
+  - Each card: title, preview text, usage count, edit/delete icons
+  - "+ New Template" button
+
+TEMPLATE EDITOR (modal or side panel):
+  - Title field
+  - Category dropdown
+  - Body textarea with variable insert buttons ({{customer_name}}, {{ticket_id}}, {{product_name}})
+  - Shortcode field (auto-filled from title, e.g. /greeting)
+  - Save button
+
+-------------------------------------------------------
+7. CHANNELS (/admin/settings/channels) — NEW (under Settings)
+-------------------------------------------------------
+LIST OF CHANNEL CARDS, each with connect/configure state:
+  - Web Chat — Active (already working badge)
+  - WhatsApp Business — Connect button → opens API key / phone number setup form
+  - Email (SMTP/IMAP) — Connect button → host, port, credentials form
+  - SMS (Twilio) — Connect button → Account SID, Auth Token, number form
+  - Instagram DM — Connect button → Meta OAuth flow
+  - Facebook Messenger — Connect button → Meta OAuth flow
+  - Telegram — Connect button → Bot Token field
+
+EACH CARD SHOWS: channel icon, status badge (Connected/Not Connected), "Configure" or "Connect" button
+
+-------------------------------------------------------
+8. WIDGET UPDATES (public/widget.js) — feature additions
+-------------------------------------------------------
+- After every AI response: thumbs up / thumbs down icons (small, subtle, bottom-right of bubble)
+  - Thumbs down → optional text input: "Why was this unhelpful?"
+- "Talk to a Human" button — appears only when AI gives fallback response
+  - Clicking it creates a ticket + notifies an agent (bell icon badge in admin sidebar)
+- Existing: floating bubble, source citations, dynamic theming, multi-language auto-detect — unchanged
+
+-------------------------------------------------------
+9. AGENT / LIVE CHAT PANEL (inside Inbox, when handoff is active)
+-------------------------------------------------------
+- Pulsing live-dot indicator on the conversation row when handoff requested
+- Bell icon with badge count in sidebar for pending handoffs
+- Agent reply box behaves like normal chat, but message bubbles marked "Agent" not "AI"
+- Full conversation context shown above (no repeat needed from customer)
+- "Return to AI" button — hands control back to bot after resolution
+
+-------------------------------------------------------
+10. ANALYTICS (/admin/analytics) — enhancement of existing page
+-------------------------------------------------------
+ADD THESE NEW SECTIONS (in addition to existing traffic graph):
+  - Deflection Rate KPI card (% resolved without human)
+  - Average Response Time KPI card
+  - Session Depth KPI card (avg messages per conversation)
+  - CSAT Score KPI card (thumbs up % of total)
+  - Language Breakdown — pie/donut chart of visitor languages
+  - Knowledge Gap Report — table: Question, Frequency, Last Asked, Client,
+    "Add to Knowledge Base" one-click button
+  - Source Document Attribution — table: Source name, Times retrieved, % of answers
+  - Token Usage & Cost — admin-only section, per client cost table
+  - Date range filter (top of page, applies to entire page)
+  - Export CSV / Export PDF buttons
+  - "Schedule weekly email report" toggle + settings
+
+-------------------------------------------------------
+11. BILLING (/admin/billing) — NEW (under Settings)
+-------------------------------------------------------
+- Current plan card (tier name, price, renewal date)
+- Usage meter bars (messages used / limit, clients used / limit)
+- "Upgrade Plan" button → plan comparison table modal
+- Payment method card (masked card number, "Update" button)
+- Invoice history table (date, amount, status, download PDF)
+
+-------------------------------------------------------
+12. EXISTING PAGES — keep unchanged
+-------------------------------------------------------
+- Landing (/), Login/Register (/auth/*)
+- Client Manager (/admin/client/[id]) — 4 tabs: Overview, Knowledge Base, Analytics, Appearance
+- Conversations (/admin/conversations) — becomes secondary, Inbox is primary now
+- Clients (/admin/clients or grid on dashboard)
+- New Chatbot (/admin/new)
+- API Keys (/admin/settings/api-keys)
+- Webhooks (/admin/webhooks)
+- Audit Logs (/admin/audit)
+
+=======================================================
+PART B — COPY-PASTE PROMPT FOR ANY AI TO BUILD THE UI
+=======================================================
+
+Copy everything between the lines below and paste it as your prompt.
+
+---------------------------------------------------------------
+Build a complete SaaS admin dashboard UI for "Vittain AI", an AI
+customer engagement platform (like a combination of Intercom,
+Gupshup, and Freshdesk). Use React with Tailwind CSS core utility
+classes only. Dark theme, professional, precision-instrument
+aesthetic — deep navy background, steel-blue accent color, thin
+hairline borders, no heavy shadows, generous whitespace.
+
+Build the following pages/views, each as a separate component,
+wired together with a persistent left sidebar and top bar:
+
+SIDEBAR NAVIGATION:
+Main section: Dashboard, Inbox, Tickets, Contacts, Conversations,
+Campaigns, Analytics, Clients, New Chatbot.
+Settings section (collapsible): Templates, Channels, Webhooks,
+API Keys, Audit Logs, Billing.
+
+1. DASHBOARD — 4 KPI stat cards (Total Clients, Active Bots,
+Messages, Knowledge Chunks), searchable client grid, "Add Client"
+button.
+
+2. INBOX — Two-column layout. Left: scrollable conversation list
+with channel icons (Web/WhatsApp/Email/SMS/Instagram/Messenger/
+Telegram), unread badges, filter tabs (All/Unassigned/Mine/Unread),
+search. Right: message thread with channel-styled bubbles, reply
+composer with canned-response slash command, "Assign to Agent"
+dropdown, "Convert to Ticket" button. Collapsible right sidebar
+showing contact context (tags, past tickets, notes).
+
+3. TICKETS — Kanban board with 5 columns: Open, In Progress,
+Waiting on Customer, Resolved, Closed. Each card shows ticket ID,
+subject, priority badge (color-coded Low/Medium/High/Urgent),
+assignee avatar, SLA countdown timer, client tag. Include a
+"+ New Ticket" button, filters, and a Kanban/Table view toggle.
+Clicking a card opens a detail view with full thread, private
+internal notes section, priority/assignee/status dropdowns, tags,
+and an activity log timeline.
+
+4. CONTACTS — Searchable/filterable table (Name, Email, Phone,
+Channel, Last Active, Total Conversations, Tags) with CSV import/
+export. Clicking a row opens a contact profile with tabs: Activity
+Timeline, Conversations (all channels), Properties (editable
+custom fields), Notes. Include a segment builder UI: rule-based
+filters like "Contacts who [asked about] [X] in the [last 7 days]",
+savable as named segments.
+
+5. CAMPAIGNS — Table list (Name, Channel, Status badge, Recipients,
+Open Rate, Click Rate) plus a 5-step campaign creation wizard:
+(1) Select Channel — WhatsApp/Email/SMS icon cards
+(2) Select Audience — pick saved segment or upload CSV
+(3) Compose Message — rich text editor, variable insert buttons
+    ({{first_name}} etc), emoji picker, attachment upload, live
+    preview pane rendering the exact channel bubble/email/SMS look
+(4) Schedule — send now or pick date/time, optional A/B test toggle
+(5) Review & Send — summary card, final send button
+Include a post-send campaign detail view with delivery stats and
+a performance chart.
+
+6. TEMPLATES — Grid of canned response cards grouped by category
+tabs (Greeting/FAQ/Troubleshooting/Closing/Upsell), each showing
+title, preview, usage count. Template editor modal with title,
+category, body (with variable insert buttons), and shortcode field.
+
+7. CHANNELS (under Settings) — List of channel connection cards
+(Web Chat, WhatsApp Business, Email, SMS, Instagram, Messenger,
+Telegram), each with status badge and Connect/Configure button.
+
+8. ANALYTICS — Sticky filter bar (client selector + date range +
+export buttons) at top. Below it in order: KPI row (Deflection
+Rate, Avg Response Time, Session Depth, CSAT Score), traffic trend
+chart, AI-generated topic insights card with ranked bar list,
+Knowledge Gap Report table (Question/Frequency/Last Asked/
+"Add to Knowledge Base" button), Source Document Attribution
+table, Language Breakdown donut chart, and a "Schedule weekly
+email report" settings card at the bottom.
+
+9. BILLING (under Settings) — Current plan card, usage meter bars,
+payment method card, invoice history table.
+
+10. WIDGET PREVIEW — Show the chat widget with thumbs up/down
+icons under each AI response, and a "Talk to a Human" button that
+appears only on fallback responses.
+
+Use consistent components across all pages: stat cards with a
+small trend sparkline, colored status badges (never color alone,
+pair with an icon), tables with hover states, a reusable modal
+component, and a reusable slide-over panel component for detail
+views. Keep typography consistent: a display font for headers, a
+body font for text, and a monospace font for IDs/keys/technical
+values. Make every page state-driven and interactive — clicking
+rows, cards, and buttons should navigate or open the relevant
+detail view/modal, even with placeholder data.
+---------------------------------------------------------------
+
+END OF DOCUMENT
+
+
+WHATSAPP + EMAIL CHANNEL — SYSTEM DESIGN
+===========================================
+Goal: reuse the existing RAG brain, just add two new "ears and mouths"
+(WhatsApp + Email) that feed into the same chat pipeline you already built.
+
+-------------------------------------------------
+HOW IT WORKS — END TO END
+-------------------------------------------------
+
+STEP 1 — Client connects their channel (in your dashboard)
+  - Client goes to Settings → Channels
+  - Enters WhatsApp Business number + connects via Meta API (OAuth/token)
+  - Enters business email (connects via SMTP/IMAP or a provider like
+    Resend/Postmark for sending, and a webhook for receiving)
+  - This links their WhatsApp number / email address to their existing
+    context_id — the same knowledge base they already built on the website
+
+STEP 2 — Customer messages the business
+  - WhatsApp: customer sends "hi I like that VXL 45, what's its cost and
+    warranty?" to the client's WhatsApp number
+  - Email: customer emails the client's support address with the same question
+
+STEP 3 — Message lands on your server
+  - WhatsApp: Meta sends the message to YOUR webhook endpoint
+    (POST /api/channels/whatsapp/webhook)
+  - Email: your email provider forwards the incoming email to YOUR
+    webhook endpoint (POST /api/channels/email/webhook)
+  - Both webhooks extract: sender (phone number or email), message text,
+    and which client/context_id this belongs to (matched by the
+    business number/email that received it)
+
+STEP 4 — Same RAG pipeline you already built runs
+  - Message text goes into your EXISTING /api/chat logic:
+    Q&A pairs check → query cache check → vector search → Groq LLM
+  - No new AI logic needed — this is the same brain, new doorway
+
+STEP 5 — Reply sent back through the same channel
+  - WhatsApp: your server calls Meta's Send Message API with the answer
+  - Email: your server calls your email provider's Send API with the
+    answer as a reply in the same thread
+  - Message + response both logged to your existing "messages" table,
+    tagged with channel = 'whatsapp' or 'email' (this also feeds your
+    Inbox and Analytics automatically since they already read that table)
+
+STEP 6 — Conversation continues naturally
+  - Customer says "no thanks" → bot replies politely and conversation
+    session just goes idle (WhatsApp: 24hr window closes / Email: thread ends)
+  - If customer had asked for an order status, the order-lookup flow you
+    already built (Google Sheets / REST API / CSV lookup) triggers exactly
+    the same way it does on the website widget
+
+-------------------------------------------------
+WHAT'S ACTUALLY NEW (vs what you reuse)
+-------------------------------------------------
+REUSED AS-IS:
+  - /api/chat pipeline (Q&A, cache, RAG, Groq)
+  - Vector search, embeddings, chunking
+  - Order database lookup logic
+  - messages table + Inbox/Analytics (just add channel tagging)
+
+NEW PIECES NEEDED:
+  - WhatsApp webhook receiver + sender (channel adapter)
+  - Email webhook receiver + sender (channel adapter)
+  - A "channel router" — maps incoming phone number/email to the
+    correct client's context_id
+  - Message formatting layer — WhatsApp has character/media rules,
+    email needs subject lines + HTML formatting, website widget doesn't
+  - Session/thread tracking per channel (WhatsApp uses 24hr windows,
+    email uses thread IDs, different rules than your sessionStorage)
+
+-------------------------------------------------
+NEW API ROUTES TO BUILD
+-------------------------------------------------
+POST /api/channels/whatsapp/webhook   — receives incoming WhatsApp messages
+POST /api/channels/whatsapp/send      — sends a reply via WhatsApp
+POST /api/channels/email/webhook      — receives incoming emails
+POST /api/channels/email/send         — sends a reply email
+POST /api/channels/config             — client connects/saves their
+                                          WhatsApp number or email in dashboard
+GET  /api/channels/config?context_id= — fetch current channel connections
+
+-------------------------------------------------
+NEW EXTERNAL APIs / SERVICES NEEDED (in addition to what you already have)
+-------------------------------------------------
+
+1. WhatsApp — Meta Cloud API (direct) OR a BSP like 360dialog/Twilio/Gupshup
+   - Direct Meta Cloud API is FREE for the API itself, you only pay Meta's
+     per-conversation fee (~$0.02-$0.15 depending on country/category)
+   - A BSP (360dialog, Twilio, Gupshup) adds their own fee on top but
+     gives you easier setup, template management UI, and support
+   - RECOMMENDATION for your stage: start with Meta Cloud API directly —
+     it's free to integrate, only Meta's per-message cost applies
+
+2. Email sending — Resend (you already need this from our earlier list)
+   - Free tier: 3,000 emails/month
+   - Handles both transactional (your platform) AND client reply emails
+
+3. Email receiving — need ONE of these:
+   - Resend's inbound email webhook (if using their domain routing)
+   - OR Postmark inbound parsing (free tier available, very reliable
+     for parsing incoming emails into clean JSON)
+   - OR SendGrid Inbound Parse (free tier available)
+   RECOMMENDATION: Postmark inbound parse — cleanest JSON output,
+   easiest to work with, generous free tier for low volume
+
+4. NEW database table: channels
+   id, context_id, channel_type (whatsapp/email), identifier
+   (phone number or email address), access_token/credentials, status
+
+-------------------------------------------------
+BILLING & PAYMENTS SYSTEM (separate but related)
+-------------------------------------------------
+This is for YOU charging YOUR clients (subscription), not for their
+customers paying for products.
+
+WHAT YOU NEED:
+  - Stripe (free to integrate, ~2.9% + 30¢ per transaction, no monthly fee)
+  - Stripe Checkout for subscription signup
+  - Stripe Customer Portal for clients to manage their own billing
+  - Stripe Webhooks to know when payment succeeds/fails/subscription cancels
+
+NEW API ROUTES:
+  POST /api/billing/create-checkout-session
+  POST /api/billing/webhook            — Stripe sends events here
+  POST /api/billing/create-portal-session
+  GET  /api/billing/subscription?context_id=
+
+NEW DATABASE TABLE: subscriptions
+  id, context_id, stripe_customer_id, stripe_subscription_id,
+  plan_name, status, current_period_end
+
+NOTE: This billing system is entirely separate from WhatsApp/Email —
+don't mix them. Billing = you charging clients monthly. WhatsApp/Email
+= the channels their customers use to talk to the bot.
+
+-------------------------------------------------
+FULL LIST — ALL APIs YOU'D HAVE AFTER THIS ADDITION
+-------------------------------------------------
+ALREADY HAVE:
+  Supabase, Firecrawl, Gemini, Groq, Upstash Redis, Vercel
+
+ADD FOR WHATSAPP/EMAIL:
+  Meta Cloud API (WhatsApp) — free, pay per conversation
+  Resend — email sending, free tier
+  Postmark (or similar) — email receiving/parsing, free tier
+
+ADD FOR BILLING:
+  Stripe — free to integrate, transaction fee only
+
+TOTAL NEW SIGNUPS NEEDED: 3 (Meta Business, Postmark, Stripe)
+  Resend you already planned to add earlier for auth emails.
